@@ -516,11 +516,33 @@ return card('Employee onboarding',`
 <div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Add new employee',"onboardingNew()",'primary')}${btn('Upload employee list',"onboardingUpload()")}</div></div>
 <div class="onboard-note">Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
-<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${btn('Reload sample joiners',"onboardingReseed()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
+<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${btn('Reload sample joiners',"onboardingReseed()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
 ${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Add a new employee or upload a list to begin.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
 
 global.onboardingView=function(v){if(!permitted())return;state.onboardingView=v;render()};
+
+/* Cases created from an uploaded list, removed together. */
+global.onboardingRemoveUploaded=function(){if(!permitted())return;
+const uploaded=records().filter(r=>r.batch);
+if(!uploaded.length)return toast('No uploaded cases to remove.');
+const withProfile=uploaded.filter(r=>r.profile);
+const removable=uploaded.filter(r=>!r.profile);
+const started=removable.filter(r=>r.stage>1||r.acceptance);
+modal('Remove uploaded cases',`<p>This permanently removes ${removable.length} onboarding case(s) created from an uploaded employee list. This cannot be undone.</p>
+<div class="tablewrap" style="max-height:220px;overflow:auto"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th></tr></thead><tbody>${removable.map(r=>`<tr><td data-i18n-user>${esc(r.name)}</td><td>${esc(r.id)}</td><td>${r.stage}/8</td></tr>`).join('')}</tbody></table></div>
+${started.length?`<div class="callout">${started.length} of these have moved past Offer issued. Their documents, answers and history go with them.</div>`:''}
+${withProfile.length?`<div class="callout">${withProfile.length} uploaded case(s) already have an employee profile and are kept. Remove those from People &amp; Service Records if they should not exist.</div>`:''}
+<p class="sub">Cases you created with Add new employee and the sample joiners are not touched.</p>`,
+btn('Cancel',"$('#dialog').close()")+btn('Remove '+removable.length+' case(s)',"onboardingRemoveUploadedConfirm()",'primary'))};
+
+global.onboardingRemoveUploadedConfirm=function(){if(!permitted())return;
+const previous=structuredClone(state.onboarding||[]);
+const removed=records().filter(r=>r.batch&&!r.profile).length;
+if(!removed)return;
+state.onboarding=(state.onboarding||[]).filter(r=>!(r.batch&&!r.profile));
+if(!persist('Uploaded onboarding cases removed: '+removed,()=>{state.onboarding=previous}))return;
+$('#dialog').close();render();toast(removed+' uploaded case(s) removed.')};
 
 global.onboardingReseed=function(){if(!permitted())return;
 const own=records().filter(r=>!r.sample).length;

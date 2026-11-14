@@ -1174,5 +1174,7 @@ window.SAMANVAY_HI = {
   "Keep my offer": "मेरा प्रस्ताव बनाए रखें",
   "Decline the offer": "प्रस्ताव अस्वीकार करें",
   "Type your full name": "अपना पूरा नाम लिखें",
-  "Your message": "आपका संदेश"
+  "Your message": "आपका संदेश",
+  "Remove uploaded cases": "अपलोड किए गए प्रकरण हटाएँ",
+  "Cancel": "रद्द करें"
 };
