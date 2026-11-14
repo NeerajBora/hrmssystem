@@ -250,3 +250,6 @@ transition:background .15s ease,border-color .15s ease}
 .onb-board li.done .onb-board-body strong{color:#1f7a4d}
 .onb-board-action{flex:0 0 auto;padding-top:2px}
 .onb-board-action button{min-width:0;min-height:0;padding:0;font-size:11px;font-weight:700}
+
+.onb-board li.failed .onb-board-mark{background:#fbece5;color:#a14925}
+.onb-board li.failed .onb-board-body strong{color:#a14925}

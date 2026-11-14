@@ -341,6 +341,13 @@ lines:[['Basic pay',basic],['Dearness allowance',da],['House rent allowance',hra
 .concat(shiftAllowance?[['Shift allowance',shiftAllowance]]:[])
 .concat(conveyance?[['Conveyance',conveyance]]:[])}}
 
+/* Finance workflow: identity and bank verification gate the compensation. */
+const financeChecks=[
+{id:'bank',name:'Bank account verification',document:'d_bank',detail:'Account details checked against the document the joiner sent.'},
+{id:'pan',name:'PAN verification',document:'d_tax',detail:'Tax declaration checked for a valid permanent account number.'},
+{id:'aadhaar',name:'Aadhaar verification',document:'d_identity',detail:'Identity proof checked against the name on the case.'}];
+const financeCleared=run=>!!run&&(run.output.checks||[]).length>0&&(run.output.checks||[]).every(c=>((run.output.checkStates||{})[c.id]||{}).state==='Verified');
+
 /* Logistics workflow: only has work to do when relocation was asked for. */
 function logistics(record){
 if(!record.relocating)return {needed:false,tasks:[]};
@@ -391,7 +398,7 @@ const stamp=(context&&context.stamp)||'';
 if(!record.employeeId)record.employeeId=nextEmployeeId(record,ids);
 if(!record.companyEmail)record.companyEmail=companyEmail(record,taken);
 const runs=record.workflows||(record.workflows={});
-runs.finance=runs.finance||{state:'Drafted',ranOn:stamp,output:compensation(record)};
+runs.finance=runs.finance||{state:'Drafted',ranOn:stamp,output:Object.assign(compensation(record),{checks:financeChecks,checkStates:{}})};
 const plan=logistics(record);
 runs.logistics=runs.logistics||{state:plan.needed?'Drafted':'Not required',ranOn:stamp,output:plan};
 runs.hr=runs.hr||{state:'Drafted',ranOn:stamp,output:Object.assign(draftProfile(record),{companyEmail:record.companyEmail})};
@@ -505,7 +512,7 @@ rationale:pattern.rationale||'',
 model:pattern.model||''});
 return merged}
 
-const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,applyPattern,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
+const model={stages,financeChecks,financeCleared,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,applyPattern,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -517,6 +524,12 @@ let preview=[],fileName='',reading=0;
 const caseModal=(title,body,foot,wide)=>{modal(title,body,foot);const d=$('#dialog');d.classList.add('onb-buttons');if(wide)d.classList.add('onb-dialog')};
 
 const permitted=()=>role==='HR officer'&&!signedOut;
+/* A run abandoned by a reload or a stalled call must not block the next one. */
+const agentBusy=agent=>{
+if(!agent||agent.state!=='Running')return false;
+const started=Date.parse(agent.startedAt||0);
+return Number.isFinite(started)&&Date.now()-started<120000};
+
 /* Demonstration setting: a document the joiner sends is verified straight
    away, so a case can be walked forward without HR checking each row. Turn it
    off to see the real rule, where sending and verifying are separate acts. */
@@ -758,6 +771,32 @@ ${profilePairs([['Submitted by the joiner',r.submittedOn||'Not submitted'],['Emp
 ${workflowsSettled(r)&&!r.accessReleasedOn?`<div class="toolbar onb-actions">${btn('Release HRMS access',`onboardingRelease('${r.id}')`,'primary')}</div>`:''}
 ${r.accessReleasedOn?`<p class="onb-released">HRMS access released on ${esc(r.accessReleasedOn)}. The joiner can sign in with ${esc(r.employeeId)}.</p>`:''}`}
 
+/* Finance: the checks first, the compensation only once they pass. */
+const checkState=(out,id)=>((out.checkStates||{})[id]||{state:'Pending',note:''});
+function financeBoard(r,out,run){
+const agent=r.financeAgent||{state:'Not run'};
+const checks=out.checks||[];
+const passed=checks.filter(c=>checkState(out,c.id).state==='Verified').length;
+const cleared=financeCleared(run);
+const tone2=st=>st==='Verified'?'ok':st==='Failed'?'bad':'warn';
+return `<h3>Identity and bank verification</h3>
+<div class="onb-head"><span class="badge ${cleared?'ok':'warn'}">${passed} of ${checks.length} verified</span><span class="onb-progress"><i style="width:${checks.length?Math.round(passed/checks.length*100):0}%"></i></span></div>
+${agent.state==='Running'?'<div class="callout">The verification agent is checking the documents…</div>':''}
+${agent.state==='Unavailable'?`<div class="callout">The verification agent is not reachable: ${esc(agent.note||'')} Mark a check by hand instead.</div>`:''}
+${agent.state==='Drafted'?`<div class="callout">Checked by the verification agent using ${esc(agent.model||'the configured model')}, against what HR has recorded for each document. No account number, PAN or Aadhaar number is held in this demonstration or sent anywhere.</div>`:''}
+<ol class="onb-board">${checks.map((c,i)=>{const st=checkState(out,c.id);const ok=st.state==='Verified';
+return `<li class="${ok?'done':st.state==='Failed'?'failed':'open'}">
+<span class="onb-board-mark">${ok?'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':i+1}</span>
+<div class="onb-board-body"><strong>${esc(c.name)}</strong>
+<small>${esc(st.note||c.detail)}</small>
+<em>Document on the case: ${esc(itemState(r,c.document))}${st.by?' · '+esc(st.state)+' · '+esc(st.by)+' · '+esc(st.date||''):''}</em></div>
+<div class="onb-board-action">${run.state==='Released'?chip(st.state,tone2(st.state)):btn(ok?'Reopen':'Mark verified',`onboardingFinanceCheck('${r.id}','${c.id}')`,'link')}</div>
+</li>`}).join('')}</ol>
+${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the verification agent again':'Run the verification agent',`onboardingFinanceAgent('${r.id}')`,cleared?'':'primary')}</div>`}
+<h3>Compensation</h3>
+${cleared?`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`
+:`<div class="callout">Compensation stays locked until the identity and bank checks pass. ${checks.length-passed} of ${checks.length} still open.</div>`}`}
+
 /* Relocation as a board: every task, what the agent arranged, what is still
    waiting. Booked here means recorded as arranged, never a real booking. */
 const taskState=(out,id)=>((out.states||{})[id]||{state:'Pending',note:''});
@@ -778,6 +817,49 @@ ${st.by?`<em>${esc(st.state)} · ${esc(st.by)} · ${esc(st.date||'')}</em>`:''}<
 </li>`}).join('')}</ol>
 ${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the relocation agent again':'Run the relocation agent',`onboardingRelocationAgent('${r.id}')`,'primary')}</div>`}`}
 
+global.onboardingFinanceCheck=function(id,checkId){if(!permitted())return;const r=find(id);if(!r)return;
+const run=r.workflows&&r.workflows.finance;if(!run||run.state==='Released')return;
+const previous=structuredClone(state.onboarding);
+const out=run.output;out.checkStates=out.checkStates||{};
+const current=out.checkStates[checkId]||{state:'Pending'};
+const next=current.state==='Verified'?'Pending':'Verified';
+const check=(out.checks||[]).find(c=>c.id===checkId);
+out.checkStates[checkId]={state:next,note:current.note||'',by:person().name,date:now()};
+log(r,check.name+' marked '+next.toLowerCase()+' by HR');
+if(!persist('Finance check '+next.toLowerCase()+' for '+r.name+': '+check.name,()=>{state.onboarding=previous}))return;
+render();onboardingWorkflow(id,'finance')};
+
+global.onboardingFinanceAgent=async function(id){
+const r=find(id);if(!r||!permitted())return;
+const run=r.workflows&&r.workflows.finance;
+if(!run||run.state==='Released')return;
+if(agentBusy(r.financeAgent))return toast('That agent is already running.');
+const token=Date.now();r.financeAgent={state:'Running',ranOn:now(),startedAt:token};
+render();onboardingWorkflow(id,'finance');
+let outcome;
+try{
+const response=await fetch('/api/verify',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({case:{designation:r.designation,dept:r.dept,grade:r.grade,employmentType:r.employmentType,location:r.location,category:categoryOf(r)},
+checks:(run.output.checks||[]).map(c=>({id:c.id,name:c.name,document:checklist.find(i=>i.id===c.document)?.name||c.document,documentState:itemState(r,c.document)}))})});
+const data=await response.json().catch(()=>({}));
+outcome=response.ok?{state:'Drafted',checks:data.checks,model:data.model,ranOn:now()}
+:{state:'Unavailable',note:data.error||'The verification agent could not be reached.',ranOn:now()};
+}catch(e){outcome={state:'Unavailable',note:'The verification agent is not available on this preview.',ranOn:now()}}
+const current=find(id);if(!current)return;
+/* A slower run must not overwrite a newer one. */
+if(current.financeAgent&&current.financeAgent.startedAt&&current.financeAgent.startedAt!==token)return;
+const live=current.workflows&&current.workflows.finance;
+current.financeAgent={state:outcome.state,note:outcome.note,model:outcome.model,ranOn:outcome.ranOn};
+if(outcome.state==='Drafted'&&live){
+live.output.checkStates=live.output.checkStates||{};
+for(const c of outcome.checks)live.output.checkStates[c.id]={state:c.status,note:c.note,by:'Verification agent',date:now()};
+const passed=outcome.checks.filter(c=>c.status==='Verified').length;
+log(current,'Verification agent checked '+outcome.checks.length+' item(s): '+passed+' verified'+(financeCleared(live)?'. Compensation is enabled.':', the rest still open'))}
+else log(current,'Verification agent unavailable · '+(outcome.note||''));
+try{save()}catch{}
+render();onboardingWorkflow(id,'finance');
+toast(outcome.state==='Drafted'?(financeCleared(live)?'Checks passed. Compensation is enabled.':'Verification finished. Some checks are still open.'):outcome.note)};
+
 global.onboardingRelocationTask=function(id,taskId){if(!permitted())return;const r=find(id);if(!r)return;
 const run=r.workflows&&r.workflows.logistics;if(!run||run.state==='Released')return;
 const previous=structuredClone(state.onboarding);
@@ -794,8 +876,8 @@ global.onboardingRelocationAgent=async function(id){
 const r=find(id);if(!r||!permitted())return;
 const run=r.workflows&&r.workflows.logistics;
 if(!run||run.state==='Released'||!run.output.needed)return;
-if(r.logisticsAgent&&r.logisticsAgent.state==='Running')return;
-r.logisticsAgent={state:'Running',ranOn:now()};
+if(agentBusy(r.logisticsAgent))return toast('That agent is already running.');
+const token=Date.now();r.logisticsAgent={state:'Running',ranOn:now(),startedAt:token};
 render();onboardingWorkflow(id,'logistics');
 let outcome;
 try{
@@ -807,6 +889,8 @@ outcome=response.ok?{state:'Drafted',arrangements:data.arrangements,model:data.m
 :{state:'Unavailable',note:data.error||'The relocation agent could not be reached.',ranOn:now()};
 }catch(e){outcome={state:'Unavailable',note:'The relocation agent is not available on this preview.',ranOn:now()}}
 const current=find(id);if(!current)return;
+/* A slower run must not overwrite a newer one. */
+if(current.logisticsAgent&&current.logisticsAgent.startedAt&&current.logisticsAgent.startedAt!==token)return;
 const live=current.workflows&&current.workflows.logistics;
 current.logisticsAgent={state:outcome.state,note:outcome.note,model:outcome.model,ranOn:outcome.ranOn};
 if(outcome.state==='Drafted'&&live){
@@ -822,10 +906,11 @@ toast(outcome.state==='Drafted'?'Relocation agent finished.':outcome.note)};
 global.onboardingWorkflow=function(id,runId){if(!permitted())return;const r=find(id);if(!r||!r.workflows||!r.workflows[runId])return;
 const run=r.workflows[runId],out=run.output;
 let body='';
-if(runId==='finance')body=`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`;
+if(runId==='finance')body=financeBoard(r,out,run);
 else if(runId==='logistics')body=out.needed?relocationBoard(r,out,run):'<div class="callout">The joiner answered that relocation is not needed, so this workflow has nothing to do.</div>';
 else body=`${profilePairs([['Employee ID',r.employeeId],['Work email',r.companyEmail],['Template',out.templateName],['Working pattern',out.shift],['Work hours',out.workHours],['Weekly off',out.weeklyOff],['Probation ends',out.probationEnd||'Not applicable'],['Leave entitlement',out.leaveEntitlement],['Access',out.access.join(', ')]])}<div class="callout">Releasing creates the employee profile in People &amp; Service Records.</div>`;
-modal(workflowNames[runId],body,btn('Close',`onboardingDetail('${id}')`)+(run.state==='Drafted'?btn('Release',`onboardingReleaseRun('${id}','${runId}')`,'primary'):''))};
+const blocked=runId==='finance'&&!financeCleared(run);
+modal(workflowNames[runId],body,btn('Close',`onboardingDetail('${id}')`)+(run.state==='Drafted'?(blocked?'<button disabled title="The identity and bank checks have to pass first">Release</button>':btn('Release',`onboardingReleaseRun('${id}','${runId}')`,'primary')):''))};
 
 global.onboardingReleaseRun=function(id,runId){if(!permitted())return;const r=find(id);if(!r||!r.workflows||!r.workflows[runId])return;
 const previous=structuredClone(state.onboarding),previousProfiles=structuredClone(state.hrmsProfiles||[]);
@@ -922,8 +1007,8 @@ render();onboardingDetail(id);toast(due.length+' item(s) cleared.')};
    case on the static preview and wherever no key is configured. */
 global.onboardingAgentDraft=async function(id,manual){
 const r=find(id);if(!r||!permitted())return;
-if(r.patternAgent&&r.patternAgent.state==='Running')return;
-r.patternAgent={state:'Running',ranOn:now()};
+if(agentBusy(r.patternAgent))return toast('That agent is already running.');
+const token=Date.now();r.patternAgent={state:'Running',ranOn:now(),startedAt:token};
 if(manual){render();onboardingDetail(id)}
 let outcome;
 try{
@@ -934,6 +1019,8 @@ outcome=response.ok?{state:'Drafted',pattern:data,ranOn:now()}
 :{state:'Unavailable',note:data.error||'The profile agent could not be reached.',ranOn:now()};
 }catch(e){outcome={state:'Unavailable',note:'The profile agent is not available on this preview.',ranOn:now()}}
 const current=find(id);if(!current)return;
+/* A slower run must not overwrite a newer one. */
+if(current.patternAgent&&current.patternAgent.startedAt&&current.patternAgent.startedAt!==token)return;
 current.patternAgent=outcome;
 if(outcome.state==='Drafted')log(current,'Profile agent drafted a working pattern: '+outcome.pattern.shift+', '+outcome.pattern.workHours);
 else log(current,'Profile agent unavailable · '+outcome.note+' The template pattern is used instead.');

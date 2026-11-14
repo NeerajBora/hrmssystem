@@ -134,7 +134,7 @@ headers:{Authorization:'Bearer '+env.OPENAI_API_KEY,'Content-Type':'application/
 body:JSON.stringify({model:'gpt-4.1-mini',store:false,instructions,
 input:[{role:'user',content:JSON.stringify({role:brief,joiningDate,tasks})}],max_output_tokens:2200,
 text:{format:{type:'json_schema',name:'arrangements',strict:true,schema:arrangementSchema}}}),
-signal:AbortSignal.timeout(55000)},arrangementSchema);
+signal:AbortSignal.timeout(35000)},arrangementSchema);
 let response=await ask();
 if(!response.ok){await new Promise(r=>setTimeout(r,700));response=await ask()}
 if(!response.ok)return json({error:response.status===429?'The relocation agent is rate limited. Please retry.':'The relocation agent could not respond. Please retry.'},502);
@@ -145,3 +145,63 @@ const clean=sanitiseArrangements(JSON.parse(out),tasks.map(t=>t.id));
 if(!clean)return json({error:'The plan did not fit the tasks. Please retry.'},422);
 return json({arrangements:clean,model:env.GEMINI_MODEL||'gemini-3.1-flash-lite'})
 }catch(e){console.error('logistics',e&&e.stack||e);return json({error:'Unable to reach the relocation agent. Please retry.'},502)}}
+
+/* ---------------------------------------------------------------------------
+   Identity and bank verification. The model is told which document the joiner
+   sent and whether HR cleared it; it never sees, and must never write, an
+   account number, a PAN or an Aadhaar number.
+--------------------------------------------------------------------------- */
+const checkSchema={type:'object',additionalProperties:false,properties:{
+checks:{type:'array',items:{type:'object',additionalProperties:false,properties:{
+id:{type:'string'},status:{type:'string',enum:['Verified','Failed','Pending']},note:{type:'string'}},
+required:['id','status','note']}}},required:['checks']};
+
+const identifierLike=/\b([A-Z]{5}[0-9]{4}[A-Z]|[0-9]{4}\s?[0-9]{4}\s?[0-9]{4}|[0-9]{9,18})\b/;
+
+export function sanitiseChecks(draft,allowed){
+if(!draft||!Array.isArray(draft.checks))return null;
+const ids=new Set(allowed||[]),seen=new Set(),out=[];
+for(const item of draft.checks){
+const id=text(item&&item.id,40);
+if(!ids.has(id)||seen.has(id))continue;
+const note=text(item&&item.note,140);
+if(!note||identifierLike.test(note))continue;
+seen.add(id);
+out.push({id,status:['Verified','Failed','Pending'].includes(item.status)?item.status:'Pending',note})}
+return out.length?out:null}
+
+export async function verify(request,env){
+const json=(v,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store'}});
+if(request.method!=='POST')return json({error:'Method not allowed'},405);
+if(!request.headers.get('oai-authenticated-user-id'))return json({error:'Sign in to use the assistant.'},401);
+if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Invalid origin'},403);
+if(!env.GEMINI_API_KEY)return json({error:'AI connection is not configured.'},503);
+try{
+const raw=await request.text();
+if(raw.length>8000)return json({error:'Request too large'},413);
+const body=JSON.parse(raw);
+const brief=roleBrief(body);
+const checks=(Array.isArray(body.checks)?body.checks:[]).map(c=>({id:text(c&&c.id,40),name:text(c&&c.name,80),
+document:text(c&&c.document,80),documentState:text(c&&c.documentState,20)})).filter(c=>c.id&&c.name).slice(0,6);
+if(!checks.length)return json({error:'No checks to run'},400);
+const instructions=`You are the finance verification desk at an Indian public-sector oil refinery. For each check you are given, say whether it passes. Reply only with the schema.
+Answer every check id you are given and no others.
+Judge only on what you are told: documentState is what HR has recorded for the document behind that check. Verified means the document is cleared and the check passes. Submitted means the document is in but not yet checked, so the check is Pending. Pending or missing means the joiner has not sent it, so the check is Pending. Failed means the document was rejected, so the check Fails.
+note is one short line, under about twenty words, saying what was checked and what the outcome rests on.
+You are never given an account number, a PAN or an Aadhaar number, and you must never write one, or any other identifier, in a note. Do not invent a bank, a branch or a name.`;
+const ask=()=>providerFetch(env,'https://api.openai.com/v1/responses',{method:'POST',
+headers:{Authorization:'Bearer '+env.OPENAI_API_KEY,'Content-Type':'application/json'},
+body:JSON.stringify({model:'gpt-4.1-mini',store:false,instructions,
+input:[{role:'user',content:JSON.stringify({role:brief,checks})}],max_output_tokens:2200,
+text:{format:{type:'json_schema',name:'checks',strict:true,schema:checkSchema}}}),
+signal:AbortSignal.timeout(35000)},checkSchema);
+let response=await ask();
+if(!response.ok){await new Promise(r=>setTimeout(r,700));response=await ask()}
+if(!response.ok)return json({error:response.status===429?'The verification agent is rate limited. Please retry.':'The verification agent could not respond. Please retry.'},502);
+const data=await response.json();
+const out=(data.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
+if(!out)return json({error:'No result returned. Please retry.'},502);
+const clean=sanitiseChecks(JSON.parse(out),checks.map(c=>c.id));
+if(!clean)return json({error:'The result did not fit the checks. Please retry.'},422);
+return json({checks:clean,model:env.GEMINI_MODEL||'gemini-3.1-flash-lite'})
+}catch(e){return json({error:'Unable to reach the verification agent. Please retry.'},502)}}

@@ -53,3 +53,17 @@ assert.equal(sanitiseArrangements(null,allowed),null);
 const trimmed=sanitiseArrangements({arrangements:[{id:'travel',status:'Booked',note:'<b>'+'x'.repeat(400)+'</b>'}]},allowed);
 assert.equal(trimmed[0].note.length,140);
 assert.equal(trimmed[0].note.includes('<'),false)});
+
+import {sanitiseChecks} from '../worker/api.mjs';
+test('a verification result may not carry an identifier or an invented check',()=>{
+const allowed=['bank','pan','aadhaar'];
+const clean=sanitiseChecks({checks:[
+{id:'bank',status:'Verified',note:'Bank details document is verified.'},
+{id:'pan',status:'Failed',note:'Tax declaration was rejected.'},
+{id:'aadhaar',status:'Verified',note:'Identity confirmed, number 1234 5678 9012'},
+{id:'payroll',status:'Verified',note:'Not a check we asked for'}]},allowed);
+assert.deepEqual(clean.map(c=>c.id),['bank','pan'],'an identifier in a note and an invented check are dropped');
+assert.equal(clean[1].status,'Failed');
+for(const note of ['PAN ABCDE1234F confirmed','Account 123456789012 checked','Aadhaar 123456789012 matched'])
+assert.equal(sanitiseChecks({checks:[{id:'bank',status:'Verified',note}]},allowed),null,note);
+assert.equal(sanitiseChecks({checks:[{id:'bank',status:'Maybe',note:'Checked'}]},allowed)[0].status,'Pending')});
