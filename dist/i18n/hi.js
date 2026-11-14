@@ -1131,5 +1131,10 @@ window.SAMANVAY_HI = {
   "Field duty pattern": "क्षेत्र कार्य प्रणाली",
   "Executive general pattern": "कार्यपालक सामान्य प्रणाली",
   "Operations rotating-shift pattern": "प्रचालन चक्रीय पाली प्रणाली",
-  "General pattern": "सामान्य प्रणाली"
+  "General pattern": "सामान्य प्रणाली",
+  "Onboarding workflow": "ऑनबोर्डिंग कार्यप्रवाह",
+  "Activity history": "गतिविधि इतिहास",
+  "Back": "वापस",
+  "cleared": "निपटाए गए",
+  "open": "खुले"
 };

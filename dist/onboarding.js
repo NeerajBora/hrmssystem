@@ -393,7 +393,7 @@ return card('Employee onboarding',`
 <div class="onboard-note">Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
 <div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${btn('Reload sample joiners',"onboardingReseed()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
-${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Add a new employee or upload a list to begin.'}</div>`}
+${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Add a new employee or upload a list to begin.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
 
 global.onboardingView=function(v){if(!permitted())return;state.onboardingView=v;render()};
@@ -480,7 +480,9 @@ if(!persist(existing?'Onboarding information updated for '+name:'Onboarding case
 $('#dialog').close();render();toast(existing?'Employee information saved.':'Onboarding case created. Offer issued.')};
 
 /* ---------- case detail ---------- */
-global.onboardingDetail=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+let caseView='overview';
+global.onboardingDetail=function(id,view){if(!permitted())return;const r=find(id);if(!r)return;
+if(view)caseView=view;
 const s=summary(r),adv=canAdvance(r),next=stages[r.stage];
 const track=stages.map(st=>`<li class="${r.stage>st.n?'done':r.stage===st.n?'current':''}"><span>${st.n}</span><strong>${st.name}</strong></li>`).join('');
 const info=profilePairs([['Case ID',caseRef(r.id)],['Status',s.status],['Stage',r.stage+' of 8 · '+stageName(r.stage)],
@@ -528,23 +530,32 @@ if(!draft)return `<h3>Employee record</h3>${profilePairs([['Employee ID',r.emplo
 return `<h3>Employee record</h3>${profilePairs([['Employee ID',draft.id],['Template',draft.templateName||'Not recorded'],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Probation ends',draft.probationEnd||'Not applicable'],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name).join(', ')],['Profile created',draft.createdOn+' by '+draft.createdBy]])}
 <div class="toolbar onb-actions">${btn('Open in People & Service Records',`onboardingOpenProfile('${r.id}')`)}</div>`}
 
-modal('Onboarding case',`
+const icon={
+info:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.4"/></svg>',
+history:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+back:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>'};
+const iconButton=(name,label,fn)=>`<button class="onb-iconbtn" title="${label}" aria-label="${label}" onclick="${fn}">${icon[name]}<span>${label}</span></button>`;
+
+const body={
+overview:`
 <h3 data-i18n-user>${esc(r.name)}</h3>
 <div class="onb-head">${chip(s.status,tone(s.status))}<span class="onb-progress"><i style="width:${s.percent}%"></i></span><small>${s.done} of ${s.total} checklist items cleared</small></div>
 ${r.needsInfo?`<div class="callout">Employee information is incomplete for this case. ${btn('Add employee information',`onboardingNew('${r.id}')`,'link')}</div>`:''}
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
 <ol class="onb-track">${track}</ol>
-<p class="sub">${esc(stages[r.stage-1].note)}</p>
 <div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}</div>
-${adv.ok||!s.missing.length?'':`<p class="onb-outstanding">Outstanding: ${esc(s.missing.join(', '))}</p>`}
 ${confirmPanel(r)}
 ${profilePanel(r)}
-<h3>Employee information</h3>${info}
-<h3>Checklist</h3>
-${groupBlocks}
-<h3>Activity history</h3>
-<div class="onb-history">${r.history.map(e=>`<p><small data-i18n-user>${esc(e.date)} · ${esc(e.by||'')} · ${esc(e.action)}</small></p>`).join('')}</div>`,
-btn('Close',"$('#dialog').close()"));$('#dialog').classList.add('onb-dialog')};
+<button class="onb-open-checklist" onclick="onboardingDetail('${r.id}','checklist')"><span><strong>Checklist</strong><small>${s.done} of ${s.total} cleared${s.open.length?' · '+s.open.length+' open':''}</small></span><b>→</b></button>`,
+checklist:`<h3>Checklist · <span data-i18n-user>${esc(r.name)}</span></h3>${groupBlocks}`,
+info:`<h3>Employee information · <span data-i18n-user>${esc(r.name)}</span></h3>${info}`,
+history:`<h3>Activity history · <span data-i18n-user>${esc(r.name)}</span></h3><div class="onb-history">${r.history.map(e=>`<p><small data-i18n-user>${esc(e.date)} · ${esc(e.by||'')} · ${esc(e.action)}</small></p>`).join('')}</div>`};
+
+const foot=caseView==='overview'
+?`<div class="onb-footleft">${iconButton('info','Employee information',`onboardingDetail('${r.id}','info')`)}${iconButton('history','Activity history',`onboardingDetail('${r.id}','history')`)}</div>${btn('Close',"$('#dialog').close()")}`
+:`<div class="onb-footleft"><button class="onb-back" onclick="onboardingDetail('${r.id}','overview')">${icon.back}Back</button></div>${btn('Close',"$('#dialog').close()")}`;
+
+modal('Onboarding workflow',body[caseView]||body.overview,foot);$('#dialog').classList.add('onb-dialog')};
 
 global.onboardingAcceptance=function(id,answer){if(!permitted())return;const r=find(id);if(!r||r.stage!==1)return;
 const previous=structuredClone(state.onboarding);

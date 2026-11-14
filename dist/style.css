@@ -84,3 +84,17 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onb-dialog .onb-group table{font-size:11.5px}
 .onb-dialog button[disabled]{opacity:.45;cursor:not-allowed}
 @media(max-width:900px){.onb-dialog{width:96vw;max-height:94vh}.onb-dialog .self-pairs{grid-template-columns:1fr 1fr}}
+
+/* Onboarding workflow: overview, with the checklist and records behind it. */
+.onb-dialog .modalfoot{justify-content:space-between}
+.onb-footleft{display:flex;gap:8px;align-items:center}
+.onb-iconbtn{display:inline-flex;align-items:center;gap:7px;padding:8px 12px}
+.onb-iconbtn svg{display:block}
+.onb-back{display:inline-flex;align-items:center;gap:6px;padding:8px 14px}
+.onb-open-checklist{display:flex;align-items:center;justify-content:space-between;width:100%;padding:18px 20px;margin-top:26px;text-align:left;border:1px solid var(--line);border-radius:9px;background:#f7f8fa}
+.onb-open-checklist:hover{background:#eff2f7}
+.onb-open-checklist strong{display:block;font-size:13px;color:#132a54}
+.onb-open-checklist small{display:block;margin-top:4px;font-size:11px;color:var(--muted)}
+.onb-open-checklist b{font-size:15px;color:#132a54}
+.onb-dialog .onb-history{max-height:none}
+@media(max-width:650px){.onb-iconbtn span{display:none}}
