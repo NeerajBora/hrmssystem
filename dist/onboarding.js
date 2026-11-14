@@ -489,7 +489,23 @@ sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Material
 {c_security:{state:'Verified',note:'Security clearance received from the competent authority'}},
 [['30/10/2026, 4:40 pm','All documents and checks verified. Awaiting the joiner confirmation.'],['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
 
-const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
+/* An AI pattern replaces the template's pattern fields and nothing else:
+   pay, identifiers, probation and entitlement stay with the rules. */
+function applyPattern(draft,pattern){
+if(!draft||!pattern)return draft;
+const merged=Object.assign({},draft,{
+shift:pattern.shift,workHours:pattern.workHours,weeklyHours:pattern.weeklyHours,
+weeklyOff:pattern.weeklyOff,attendanceScheme:pattern.attendanceScheme,
+access:['HRMS self-service','Attendance','Payroll documents'].concat(pattern.access||[]).filter((v,i,a)=>a.indexOf(v)===i),
+training:[{name:'Safety induction',due:draft.joiningDate||'',renewal:'12 months'}].concat((pattern.training||[]).map(t=>({name:t.name,due:draft.joiningDate||'',renewal:t.renewal}))),
+templateName:'Drafted by the profile agent',
+template:'ai',
+drafter:'agent',
+rationale:pattern.rationale||'',
+model:pattern.model||''});
+return merged}
+
+const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,applyPattern,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -849,6 +865,33 @@ log(r,due.length+' item(s) cleared for the demonstration at '+stageName(r.stage)
 if(!persist('Checks cleared for the demonstration: '+r.name,()=>{state.onboarding=previous}))return;
 render();onboardingDetail(id);toast(due.length+' item(s) cleared.')};
 
+/* The profile agent. It asks the Worker for a working pattern for the role,
+   and falls back to the template when the endpoint is not there, which is the
+   case on the static preview and wherever no key is configured. */
+global.onboardingAgentDraft=async function(id,manual){
+const r=find(id);if(!r||!permitted())return;
+if(r.patternAgent&&r.patternAgent.state==='Running')return;
+r.patternAgent={state:'Running',ranOn:now()};
+if(manual){render();onboardingDetail(id)}
+let outcome;
+try{
+const response=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({case:{designation:r.designation,dept:r.dept,grade:r.grade,employmentType:r.employmentType,location:r.location,category:categoryOf(r),relocating:!!r.relocating}})});
+const data=await response.json().catch(()=>({}));
+outcome=response.ok?{state:'Drafted',pattern:data,ranOn:now()}
+:{state:'Unavailable',note:data.error||'The profile agent could not be reached.',ranOn:now()};
+}catch(e){outcome={state:'Unavailable',note:'The profile agent is not available on this preview.',ranOn:now()}}
+const current=find(id);if(!current)return;
+current.patternAgent=outcome;
+if(outcome.state==='Drafted')log(current,'Profile agent drafted a working pattern: '+outcome.pattern.shift+', '+outcome.pattern.workHours);
+else log(current,'Profile agent unavailable · '+outcome.note+' The template pattern is used instead.');
+try{save()}catch{}
+render();if(manual)onboardingDetail(id);
+if(manual)toast(outcome.state==='Drafted'?'Profile agent drafted the pattern.':outcome.note)};
+
+const agentPattern=r=>r.patternAgent&&r.patternAgent.state==='Drafted'?r.patternAgent.pattern:null;
+const profileFor=r=>applyPattern(draftProfile(r),agentPattern(r));
+
 /* The joiner's own link into this case. */
 global.onboardingPortal=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 if(!r.portalToken){try{save()}catch{}}
@@ -875,8 +918,10 @@ const note=val('onbAdvanceNote'),previous=structuredClone(state.onboarding);
 r.stage=Math.min(8,r.stage+1);
 log(r,'Stage advanced to '+stageName(r.stage)+(note?' · '+note:''));
 if(r.stage>=4&&!r.employeeId){issueEmployeeId(r);log(r,'Employee identifier '+r.employeeId+' issued on reaching Ready to join')}
+const reachedReady=r.stage===4;
 if(!persist('Onboarding stage advanced for '+r.name+' to '+stageName(r.stage),()=>{state.onboarding=previous}))return;
-render();onboardingDetail(id);toast('Stage advanced to '+stageName(r.stage)+'.')};
+render();onboardingDetail(id);toast('Stage advanced to '+stageName(r.stage)+'.');
+if(reachedReady&&!r.patternAgent)onboardingAgentDraft(id)};
 
 /* ---------- joining confirmation ---------- */
 const setItem=(record,itemId,state,note)=>{record.items[itemId]=Object.assign(record.items[itemId]||{},{state,note:note||'',by:person().name,date:now()})};
@@ -964,15 +1009,26 @@ return record.employeeId}
 
 global.onboardingDraftProfile=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
-const draft=draftProfile(r);
+const draft=profileFor(r);
 const matched=matchTemplate(r);
+const agent=r.patternAgent||{state:'Not run'};
 caseModal('Employee profile draft',`<p class="sub">Drafted from onboarding case ${esc(r.id)} by the profile agent. Nothing is created until HR approves this draft. Review the working pattern and entitlement before approving.</p>
-<div class="callout"><strong>${esc(draft.templateName)}</strong> applied${draft.templateChosenByHR?' by HR, in place of the '+esc(matched.name.toLowerCase())+' matched from the designation':' from the designation and role'}. ${esc(templateById(draft.template).covers)}.</div>
+${draft.drafter==='agent'
+?`<div class="callout"><strong>Drafted by the profile agent</strong> from the designation, department, grade and employment type, using ${esc(agent.pattern&&agent.pattern.model||'the configured model')}. ${esc(draft.rationale||'')} HR reviews it before anything is created.</div>`
+:`<div class="callout"><strong>${esc(draft.templateName)}</strong> applied${draft.templateChosenByHR?' by HR, in place of the '+esc(matched.name.toLowerCase())+' matched from the designation':' from the designation and role'}. ${esc(templateById(draft.template).covers)}.${agent.state==='Unavailable'?' The profile agent was not reachable: '+esc(agent.note||''):''}</div>`}
+<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the profile agent again':'Run the profile agent',`onboardingAgentDraft('${r.id}',true)`)}${draft.drafter==='agent'?btn('Use the template pattern',`onboardingAgentClear('${r.id}')`):''}</div>
 <label class="field full">Working pattern template<select id="onbTemplate">${profileTemplates.map(t=>`<option value="${t.id}" ${t.id===draft.template?'selected':''}>${t.name}${t.id===matched.id?' · matched from the designation':''}</option>`).join('')}</select></label>
 <div class="toolbar onb-actions">${btn('Apply this pattern',`onboardingApplyTemplate('${r.id}')`)}${draft.templateChosenByHR?btn('Use the matched pattern',`onboardingResetTemplate('${r.id}')`):''}</div>
 ${profilePairs([['Employee ID',draft.id],['Name',draft.name],['Designation',draft.job],['Category',draft.category],['Department',draft.dept],['Work location',draft.location],['Employment',draft.employment],['Grade',draft.grade||'Not recorded'],['Template',draft.templateName],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Joining date',draft.joiningDate||'Not confirmed'],['Probation ends',draft.probationEnd||'Not applicable'],['Reporting manager',draft.manager],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name+' (renew every '+t.renewal+')').join(' · ')]])}
 <div class="callout">Approving adds this profile to People &amp; Service Records in this browser. No payroll, attendance device, or external system is written.</div>`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Approve and create profile',`onboardingCreateProfile('${id}')`,'primary'))};
+
+global.onboardingAgentClear=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const previous=structuredClone(state.onboarding);
+r.patternAgent={state:'Set aside',ranOn:now()};
+log(r,'Profile agent pattern set aside. The template pattern is used.');
+if(!persist('Profile agent pattern set aside for '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDraftProfile(id);toast('Template pattern restored.')};
 
 global.onboardingApplyTemplate=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const choice=val('onbTemplate'),template=templateById(choice);
@@ -994,7 +1050,7 @@ global.onboardingCreateProfile=function(id){if(!permitted())return;const r=find(
 if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
 if(r.profile)return toast('A profile already exists for this case.');
 const previousCases=structuredClone(state.onboarding),previousProfiles=structuredClone(state.hrmsProfiles||[]);
-const draft=draftProfile(r);
+const draft=profileFor(r);
 draft.createdOn=now();draft.createdBy=person().name;draft.case=r.id;
 r.profile=draft;
 state.hrmsProfiles=[...(state.hrmsProfiles||[]),draft];
