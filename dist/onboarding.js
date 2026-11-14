@@ -248,6 +248,21 @@ access:['HRMS self-service','Attendance','Payroll documents'].concat(template.ac
 training:[{name:'Safety induction',due:record.joiningDate||'',renewal:'12 months'}].concat(template.training.map(t=>({name:t.name,due:record.joiningDate||'',renewal:t.renewal}))),
 source:'Drafted from onboarding case '+record.id+' using the '+template.name.toLowerCase()}}
 
+/* ---------------------------------------------------------------------------
+   The joiner's own side of the case. The joiner submits and replies; only HR
+   verifies, waives or advances a stage.
+--------------------------------------------------------------------------- */
+const joinerKinds=['document','signature'];
+function joinerTasks(record){return record.stage<3?[]:applicable(record).filter(i=>joinerKinds.includes(i.kind)&&i.stage<=record.stage)}
+function joinerCanSubmit(record,itemId){
+if(record.acceptance!=='Yes')return {ok:false,reason:'The offer has not been accepted yet.'};
+if(!joinerTasks(record).some(i=>i.id===itemId))return {ok:false,reason:'This step is not yours to complete.'};
+const current=itemState(record,itemId);
+if(current==='Verified'||current==='Waived')return {ok:false,reason:'This document is already cleared.'};
+return {ok:true}}
+function joinerAwaitingAnswer(record){return record.stage>=2&&proposalOf(record).state==='Awaiting joiner'}
+function joinerOutstanding(record){return joinerTasks(record).filter(i=>!['Verified','Waived','Submitted'].includes(itemState(record,i.id))||itemState(record,i.id)==='Failed')}
+
 function ensureRecord(record){
 if(!record.stage)record.stage=1;
 /* Cases stored before the joining confirmation existed settled it off-system. */
@@ -260,6 +275,7 @@ if(!record.items)record.items={};
 if(!record.history)record.history=[];
 if(record.screening===undefined)record.screening=true;
 if(record.acceptance===undefined)record.acceptance=null;
+if(!record.portalToken)record.portalToken=(globalThis.crypto&&crypto.randomUUID?crypto.randomUUID().slice(0,8):String(Math.random()).slice(2,10));
 return record}
 
 /* ---------------------------------------------------------------------------
@@ -334,7 +350,7 @@ sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Material
 {d_identity:{state:'Verified'},d_education:{state:'Verified'},d_bank:{state:'Submitted'},c_medical:{state:'Verified'},s_agreement:{state:'Verified'},c_security:{state:'Submitted',note:'Security clearance request sent to the competent authority'}},
 [['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
 
-const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
+const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -548,7 +564,7 @@ ${r.needsInfo?`<div class="callout">Employee information is incomplete for this 
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
 <div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
-<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}</div>
+<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}</div>
 ${confirmPanel(r)}
 ${profilePanel(r)}`,
 checklist:`<h3>Checklist · <span data-i18n-user>${esc(r.name)}</span></h3>${groupBlocks}`,
@@ -560,6 +576,11 @@ const foot=caseView==='overview'
 :`<div class="onb-footleft"><button class="onb-back" onclick="onboardingDetail('${r.id}','overview')">${icon.back}Back</button></div>${btn('Close',"$('#dialog').close()")}`;
 
 caseModal('Onboarding workflow',body[caseView]||body.overview,foot,true)};
+
+/* The joiner's own link into this case. */
+global.onboardingPortal=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+if(!r.portalToken){try{save()}catch{}}
+$('#dialog').close();location.hash='#/joining/'+r.portalToken};
 
 global.onboardingAcceptance=function(id,answer){if(!permitted())return;const r=find(id);if(!r||r.stage!==1)return;
 const previous=structuredClone(state.onboarding);
