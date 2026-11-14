@@ -513,11 +513,11 @@ const metrics=[
 const filtered=view==='Exceptions'?rows.filter(x=>['Blocked','Pending follow-up','Stopped'].includes(x.s.status)):view==='Open'?rows.filter(x=>!['Complete','Stopped'].includes(x.s.status)):rows;
 const tabs=['Exceptions','Open','All'].map(v=>`<button class="${v===view?'primary':''}" onclick="onboardingView('${v}')">${v}</button>`).join('');
 return card('Employee onboarding',`
-<div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Add new employee',"onboardingNew()",'primary')}${btn('Upload employee list',"onboardingUpload()")}</div></div>
-<div class="onboard-note">Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
+<div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Upload employee list',"onboardingUpload()",'primary')}</div></div>
+<div class="onboard-note">Cases start from an uploaded employee list. Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
 <div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
-${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Add a new employee, upload a list, or load the sample joiners.'}</div>`}
+${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Upload an employee list, or load the sample joiners.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
 
 global.onboardingView=function(v){if(!permitted())return;state.onboardingView=v;render()};
@@ -533,7 +533,7 @@ modal('Remove uploaded cases',`<p>This permanently removes ${removable.length} o
 <div class="tablewrap" style="max-height:220px;overflow:auto"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th></tr></thead><tbody>${removable.map(r=>`<tr><td data-i18n-user>${esc(r.name)}</td><td>${esc(r.id)}</td><td>${r.stage}/8</td></tr>`).join('')}</tbody></table></div>
 ${started.length?`<div class="callout">${started.length} of these have moved past Offer issued. Their documents, answers and history go with them.</div>`:''}
 ${withProfile.length?`<div class="callout">${withProfile.length} uploaded case(s) already have an employee profile and are kept. Remove those from People &amp; Service Records if they should not exist.</div>`:''}
-<p class="sub">Cases you created with Add new employee and the sample joiners are not touched.</p>`,
+<p class="sub">The sample joiners are not touched.</p>`,
 btn('Cancel',"$('#dialog').close()")+btn('Remove '+removable.length+' case(s)',"onboardingRemoveUploadedConfirm()",'primary'))};
 
 global.onboardingRemoveUploadedConfirm=function(){if(!permitted())return;
@@ -550,7 +550,7 @@ if(!samplesHere.length)return toast('No sample joiners to remove.');
 const withProfile=samplesHere.filter(r=>r.profile);
 modal('Remove sample joiners',`<p>This permanently removes ${samplesHere.length} fictional sample case(s) from this browser. This cannot be undone, although Load sample joiners brings fresh copies back.</p>
 ${withProfile.length?`<div class="callout">${withProfile.length} of them also have a sample employee profile in People &amp; Service Records. That profile is removed with its case, so neither is left on its own.</div>`:''}
-<p class="sub">Cases you created with Add new employee or from an uploaded list are not touched.</p>`,
+<p class="sub">Cases created from an uploaded list are not touched.</p>`,
 btn('Cancel',"$('#dialog').close()")+btn('Remove '+samplesHere.length+' case(s)',"onboardingRemoveSamplesConfirm()",'primary'))};
 
 global.onboardingRemoveSamplesConfirm=function(){if(!permitted())return;
@@ -587,7 +587,7 @@ const flagRow=(id,label,on)=>`<label class="onb-flag"><input type="checkbox" id=
 
 global.onboardingNew=function(existingId){if(!permitted())return;
 const r=existingId?find(existingId):null;
-modal(r?'Employee information':'Add new employee',`
+modal('Employee information',`
 <p class="sub">Fictional demonstration data only. No record is sent to SAP, payroll, or any gate system.</p>
 <h3>Personal information</h3>
 <div class="formgrid">
@@ -965,7 +965,7 @@ if(!persist('Onboarding question recorded for '+r.name+' on '+item.name,()=>{sta
 render();onboardingDetail(id);toast('Recorded on the case.')};
 
 /* ---------- bulk upload ---------- */
-global.onboardingUpload=function(){if(!permitted())return;preview=[];fileName='';reading++;caseModal('Upload employee list',`<p>Create one onboarding case per name. Employee information can be completed on each case afterwards.</p><label class="field">Employee list<input id="onboardFile" type="file" accept=".csv,.txt,text/csv,text/plain" onchange="onboardingRead(this.files[0])"></label><p class="sub">Maximum 200 KB and 500 employees. Excel files: save as CSV first.</p><div id="onboardPreview" aria-live="polite"></div>`,btn('Cancel',"$('#dialog').close()")+`<button class="primary" id="onboardStart" onclick="onboardingStart()" disabled>Start onboarding</button>`)};
+global.onboardingUpload=function(){if(!permitted())return;preview=[];fileName='';reading++;caseModal('Upload employee list',`<p>Create one onboarding case per name. Open each case afterwards and complete the employee information before the offer goes out.</p><label class="field">Employee list<input id="onboardFile" type="file" accept=".csv,.txt,text/csv,text/plain" onchange="onboardingRead(this.files[0])"></label><p class="sub">Maximum 200 KB and 500 employees. Excel files: save as CSV first.</p><div id="onboardPreview" aria-live="polite"></div>`,btn('Cancel',"$('#dialog').close()")+`<button class="primary" id="onboardStart" onclick="onboardingStart()" disabled>Start onboarding</button>`)};
 
 global.onboardingRead=async function(file){if(!permitted())return;const token=++reading;preview=[];$('#onboardStart').disabled=true;if(!file)return;fileName=file.name;try{if(!/\.(csv|txt)$/i.test(file.name))throw Error('Choose a CSV or TXT file.');if(file.size>200000)throw Error('Use a file smaller than 200 KB.');const content=await file.text();if(token!==reading||!permitted()||!$('#onboardPreview'))return;preview=parse(content,records().map(r=>r.name));const valid=preview.filter(r=>!r.issue);$('#onboardPreview').innerHTML=`<h3>Review ${esc(fileName)}</h3><p>${valid.length} ready · ${preview.length-valid.length} excluded</p><p class="sub">Duplicates and invalid rows will be skipped. Namesakes can be reviewed separately when employee identifiers are added.</p><div class="tablewrap" style="max-height:280px;overflow:auto"><table><thead><tr><th>ROW</th><th>EMPLOYEE NAME</th><th>RESULT</th></tr></thead><tbody>${preview.map(r=>`<tr><td>${r.row}</td><td data-i18n-user>${esc(r.name)}</td><td>${r.issue?esc(r.issue):'Ready'}</td></tr>`).join('')}</tbody></table></div>`;$('#onboardStart').disabled=!valid.length;$('#onboardStart').textContent='Start onboarding ('+valid.length+')'}catch(e){if(token===reading&&$('#onboardPreview'))$('#onboardPreview').textContent=e.message}};
 

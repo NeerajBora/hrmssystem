@@ -233,3 +233,4 @@ transition:background .15s ease,border-color .15s ease}
 .ask-welcome-actions button{flex:1;min-height:40px;border-radius:8px;font-size:12.5px;font-weight:700}
 .ask-welcome-close{position:absolute;top:10px;right:12px;border:0;background:none;font-size:18px;color:var(--muted);padding:4px 8px}
 @media(max-width:650px){.ask-welcome{right:14px;left:14px;width:auto;bottom:14px}}
+.onboard-intro .actions button{white-space:nowrap;min-height:44px;padding:0 22px;border-radius:9px;font-size:13px;font-weight:700}
