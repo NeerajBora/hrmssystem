@@ -1121,5 +1121,15 @@ window.SAMANVAY_HI = {
   "Leave entitlement": "अवकाश पात्रता",
   "Access": "पहुँच",
   "Training": "प्रशिक्षण",
-  "Employee ID": "कर्मचारी आईडी"
+  "Employee ID": "कर्मचारी आईडी",
+  "Working pattern template": "कार्य प्रणाली टेम्पलेट",
+  "Apply this pattern": "यह प्रणाली लागू करें",
+  "Use the matched pattern": "मिलान की गई प्रणाली उपयोग करें",
+  "Template": "टेम्पलेट",
+  "Apprentice training pattern": "प्रशिक्षु प्रशिक्षण प्रणाली",
+  "Fixed-term field pattern": "नियत-अवधि क्षेत्र प्रणाली",
+  "Field duty pattern": "क्षेत्र कार्य प्रणाली",
+  "Executive general pattern": "कार्यपालक सामान्य प्रणाली",
+  "Operations rotating-shift pattern": "प्रचालन चक्रीय पाली प्रणाली",
+  "General pattern": "सामान्य प्रणाली"
 };

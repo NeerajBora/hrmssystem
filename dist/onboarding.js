@@ -153,17 +153,61 @@ return prefix+String(highest+1).padStart(width,'0')}
 
 const categoryOf=record=>record.employmentType==='Agency contract'?'Agency worker':record.employmentType==='Apprentice / trainee'?'Apprentice':record.employmentType==='Permanent non-executive'?'Workman':/^E/.test(record.grade||'')?'Executive':'Workman';
 const employmentOf=record=>record.employmentType==='Fixed-term contract'?'Fixed-term':record.employmentType==='Agency contract'?'Agency contract':record.employmentType==='Apprentice / trainee'?'Apprentice':'Permanent';
-const fieldRole=record=>/field|project|expansion/i.test((record.dept||'')+' '+(record.designation||''));
-const operationsRole=record=>/operation|utilit|maintenance|refinery|production|quality/i.test((record.dept||'')+' '+(record.designation||''));
 
-/* The working pattern follows the role, not the person. */
-function workPattern(record){
-const category=categoryOf(record);
-if(category==='Apprentice')return {shift:'General',hours:'09:00–16:30',weekly:36,off:'Saturday and Sunday',scheme:'Training attendance'};
-if(fieldRole(record))return {shift:'Field duty',hours:'08:00–17:00',weekly:45,off:'By field roster',scheme:'Field attendance'};
-if(category==='Executive')return {shift:'General',hours:'09:00–17:30',weekly:42.5,off:'Saturday and Sunday',scheme:'General attendance'};
-if(operationsRole(record))return {shift:'Rotating',hours:'8 hours per shift, three shifts',weekly:42,off:'By shift roster',scheme:'Shift attendance'};
-return {shift:'General',hours:'09:00–17:30',weekly:42.5,off:'Saturday and Sunday',scheme:'General attendance'}}
+/* ---------------------------------------------------------------------------
+   Profile templates. The working pattern follows the designation and the role,
+   never the person. Each template says which roles it covers, what it sets,
+   and what training it carries. The first template whose match returns true,
+   in this order, is the one applied; HR can apply a different one by hand.
+--------------------------------------------------------------------------- */
+const designationWords=record=>((record.designation||'')+' '+(record.dept||'')).toLowerCase();
+const anyWord=(record,words)=>words.some(word=>designationWords(record).includes(word));
+
+const fieldWords=['field','project','expansion','site','survey','pipeline','commissioning'];
+const operationsWords=['operation','operator','utilit','maintenance','refinery','production','quality','plant','boiler','shift','technician','mechanic','welder','fitter','electrician','instrument','laboratory','chemist','process','safety'];
+
+const profileTemplates=[
+{id:'apprentice',name:'Apprentice training pattern',
+covers:'Apprentices and trainees, whatever the designation',
+match:record=>categoryOf(record)==='Apprentice',
+shift:'General',hours:'09:00–16:30',weekly:36,off:'Saturday and Sunday',scheme:'Training attendance',
+access:['Training records'],training:[{name:'Apprentice induction and workshop safety',renewal:'12 months'}]},
+
+{id:'fixed_term_field',name:'Fixed-term field pattern',
+covers:'Fixed-term and agency roles on field, project or commissioning work',
+match:record=>['Fixed-term','Agency contract'].includes(employmentOf(record))&&anyWord(record,fieldWords),
+shift:'Field duty',hours:'08:00–17:00',weekly:45,off:'By field roster',scheme:'Field attendance',
+access:['Site access'],training:[{name:'Work-at-height and field safety',renewal:'12 months'},{name:'Contractor site induction',renewal:'12 months'}]},
+
+{id:'field_duty',name:'Field duty pattern',
+covers:'Field, project, site and commissioning roles on the permanent rolls',
+match:record=>anyWord(record,fieldWords),
+shift:'Field duty',hours:'08:00–17:00',weekly:45,off:'By field roster',scheme:'Field attendance',
+access:['Site access'],training:[{name:'Work-at-height and field safety',renewal:'12 months'}]},
+
+{id:'executive_general',name:'Executive general pattern',
+covers:'Executive grades on general duty, including engineering and corporate roles',
+match:record=>categoryOf(record)==='Executive',
+shift:'General',hours:'09:00–17:30',weekly:42.5,off:'Saturday and Sunday',scheme:'General attendance',
+access:['Team approvals'],training:[]},
+
+{id:'operations_rotating',name:'Operations rotating-shift pattern',
+covers:'Operations, utilities, maintenance and quality roles worked in shifts',
+match:record=>anyWord(record,operationsWords),
+shift:'Rotating',hours:'8 hours per shift, three shifts',weekly:42,off:'By shift roster',scheme:'Shift attendance',
+access:['Shift roster'],training:[{name:'Unit-specific operations training',renewal:'24 months'}]},
+
+{id:'general_default',name:'General pattern',
+covers:'Anything the templates above do not cover',
+match:()=>true,
+shift:'General',hours:'09:00–17:30',weekly:42.5,off:'Saturday and Sunday',scheme:'General attendance',
+access:[],training:[]}];
+
+const templateById=id=>profileTemplates.find(t=>t.id===id);
+function matchTemplate(record){return profileTemplates.find(t=>t.match(record))||profileTemplates[profileTemplates.length-1]}
+/* The template HR applied by hand wins over the matched one. */
+function templateFor(record){return (record.profileTemplate&&templateById(record.profileTemplate))||matchTemplate(record)}
+function workPattern(record){const t=templateFor(record);return {template:t.id,templateName:t.name,shift:t.shift,hours:t.hours,weekly:t.weekly,off:t.off,scheme:t.scheme}}
 
 function probationEnd(record){
 const start=record.joiningDate;if(!start)return '';
@@ -174,7 +218,7 @@ return date.toISOString().slice(0,10)}
 
 /* The draft a person reviews before any profile is created. */
 function draftProfile(record){
-const pattern=workPattern(record);
+const template=templateFor(record);
 const category=categoryOf(record);
 const employment=employmentOf(record);
 const entitled=employment!=='Agency contract';
@@ -185,21 +229,24 @@ job:record.designation||'Not recorded',
 category,
 dept:record.dept||'Not recorded',
 location:record.location||'Not recorded',
-shift:pattern.shift,
+shift:template.shift,
 grade:record.grade||'',
 employment,
-workHours:pattern.hours,
-weeklyHours:pattern.weekly,
-weeklyOff:pattern.off,
-attendanceScheme:pattern.scheme,
+template:template.id,
+templateName:template.name,
+templateChosenByHR:!!(record.profileTemplate&&record.profileTemplate!==matchTemplate(record).id),
+workHours:template.hours,
+weeklyHours:template.weekly,
+weeklyOff:template.off,
+attendanceScheme:template.scheme,
 joiningDate:record.joiningDate||'',
 probationEnd:probationEnd(record),
 manager:record.manager||'Not recorded',
 payrollGroup:category==='Agency worker'?'Agency billing, not PSU payroll':category+' payroll, monthly',
 leaveEntitlement:entitled?'PSU leave rules for '+category.toLowerCase():'Agency contract terms, no PSU leave entitlement',
-access:['HRMS self-service','Attendance','Payroll documents'].concat(category==='Executive'?['Team approvals']:[]).concat(pattern.shift==='Rotating'?['Shift roster']:[]),
-training:[{name:'Safety induction',due:record.joiningDate||'',renewal:'12 months'}].concat(operationsRole(record)?[{name:'Unit-specific operations training',due:record.joiningDate||'',renewal:'24 months'}]:[]).concat(fieldRole(record)?[{name:'Work-at-height and field safety',due:record.joiningDate||'',renewal:'12 months'}]:[]),
-source:'Drafted from onboarding case '+record.id}}
+access:['HRMS self-service','Attendance','Payroll documents'].concat(template.access),
+training:[{name:'Safety induction',due:record.joiningDate||'',renewal:'12 months'}].concat(template.training.map(t=>({name:t.name,due:record.joiningDate||'',renewal:t.renewal}))),
+source:'Drafted from onboarding case '+record.id+' using the '+template.name.toLowerCase()}}
 
 function ensureRecord(record){
 if(!record.stage)record.stage=1;
@@ -279,7 +326,7 @@ sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Material
 {d_identity:{state:'Verified'},d_education:{state:'Verified'},d_bank:{state:'Submitted'},c_medical:{state:'Verified'},s_agreement:{state:'Verified'},c_security:{state:'Submitted',note:'Security clearance request sent to the competent authority'}},
 [['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
 
-const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,nextEmployeeId,draftProfile,workPattern,parse};
+const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -470,7 +517,7 @@ if(r.stage<4||r.acceptance==='No')return '';
 const draft=r.profile;
 return `<h3>Employee record</h3>
 ${r.employeeId?`<div class="callout">Employee identifier <strong>${esc(r.employeeId)}</strong> was issued when this case reached Ready to join.</div>`:'<div class="callout">No employee identifier issued yet.</div>'}
-${draft?`<p class="sub">Profile created in the HRMS portal on ${esc(draft.createdOn)} by ${esc(draft.createdBy)}, from the draft reviewed in this case.</p>${profilePairs([['Employee ID',draft.id],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Probation ends',draft.probationEnd||'Not applicable'],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name).join(', ')]])}<div class="toolbar onb-actions">${btn('Open in People & Service Records',`onboardingOpenProfile('${r.id}')`)}</div>`
+${draft?`<p class="sub">Profile created in the HRMS portal on ${esc(draft.createdOn)} by ${esc(draft.createdBy)}, from the draft reviewed in this case.</p>${profilePairs([['Employee ID',draft.id],['Template',draft.templateName||'Not recorded'],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Probation ends',draft.probationEnd||'Not applicable'],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name).join(', ')]])}<div class="toolbar onb-actions">${btn('Open in People & Service Records',`onboardingOpenProfile('${r.id}')`)}</div>`
 :`<p class="sub">The profile agent drafts the working pattern, payroll group, leave entitlement, access and training from this case. HR reviews the draft before any profile is created.</p><div class="toolbar onb-actions">${btn('Draft the employee profile',`onboardingDraftProfile('${r.id}')`,'primary')}</div>`}`}
 modal('Onboarding case',`
 <h3 data-i18n-user>${esc(r.name)}</h3>
@@ -602,10 +649,30 @@ return record.employeeId}
 global.onboardingDraftProfile=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
 const draft=draftProfile(r);
+const matched=matchTemplate(r);
 modal('Employee profile draft',`<p class="sub">Drafted from onboarding case ${esc(r.id)} by the profile agent. Nothing is created until HR approves this draft. Review the working pattern and entitlement before approving.</p>
-${profilePairs([['Employee ID',draft.id],['Name',draft.name],['Designation',draft.job],['Category',draft.category],['Department',draft.dept],['Work location',draft.location],['Employment',draft.employment],['Grade',draft.grade||'Not recorded'],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Joining date',draft.joiningDate||'Not confirmed'],['Probation ends',draft.probationEnd||'Not applicable'],['Reporting manager',draft.manager],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name+' (renew every '+t.renewal+')').join(' · ')]])}
+<div class="callout"><strong>${esc(draft.templateName)}</strong> applied${draft.templateChosenByHR?' by HR, in place of the '+esc(matched.name.toLowerCase())+' matched from the designation':' from the designation and role'}. ${esc(templateById(draft.template).covers)}.</div>
+<label class="field full">Working pattern template<select id="onbTemplate">${profileTemplates.map(t=>`<option value="${t.id}" ${t.id===draft.template?'selected':''}>${t.name}${t.id===matched.id?' · matched from the designation':''}</option>`).join('')}</select></label>
+<div class="toolbar onb-actions">${btn('Apply this pattern',`onboardingApplyTemplate('${r.id}')`)}${draft.templateChosenByHR?btn('Use the matched pattern',`onboardingResetTemplate('${r.id}')`):''}</div>
+${profilePairs([['Employee ID',draft.id],['Name',draft.name],['Designation',draft.job],['Category',draft.category],['Department',draft.dept],['Work location',draft.location],['Employment',draft.employment],['Grade',draft.grade||'Not recorded'],['Template',draft.templateName],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Joining date',draft.joiningDate||'Not confirmed'],['Probation ends',draft.probationEnd||'Not applicable'],['Reporting manager',draft.manager],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name+' (renew every '+t.renewal+')').join(' · ')]])}
 <div class="callout">Approving adds this profile to People &amp; Service Records in this browser. No payroll, attendance device, or external system is written.</div>`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Approve and create profile',`onboardingCreateProfile('${id}')`,'primary'))};
+
+global.onboardingApplyTemplate=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const choice=val('onbTemplate'),template=templateById(choice);
+if(!template)return;
+const previous=structuredClone(state.onboarding);
+if(template.id===matchTemplate(r).id)delete r.profileTemplate;else r.profileTemplate=template.id;
+log(r,'Profile pattern set to '+template.name+(r.profileTemplate?' by HR':' (matched from the designation)'));
+if(!persist('Profile pattern changed for '+r.name+': '+template.name,()=>{state.onboarding=previous}))return;
+render();onboardingDraftProfile(id);toast(template.name+' applied to the draft.')};
+
+global.onboardingResetTemplate=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const previous=structuredClone(state.onboarding);
+delete r.profileTemplate;
+log(r,'Profile pattern returned to the '+matchTemplate(r).name.toLowerCase()+' matched from the designation');
+if(!persist('Profile pattern reset for '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDraftProfile(id);toast('Matched pattern restored.')};
 
 global.onboardingCreateProfile=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
