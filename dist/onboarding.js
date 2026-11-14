@@ -1,5 +1,39 @@
 (function(global){
-function parse(text,existing=[]){if(text.length>200000)throw Error('Use a file smaller than 200 KB.');const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}else if(c===','&&!quoted){row.push(cell);cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell=''}else cell+=c}if(quoted)throw Error('Unclosed quotation mark. Please check your CSV file.');row.push(cell);rows.push(row);const nonempty=rows.filter(r=>r.some(c=>c.trim()));if(nonempty.length>501)throw Error('Upload at most 500 employees at a time.');const headers=nonempty[0]?.map(c=>c.replace(/^﻿/,'').trim().toLowerCase())||[];let column=headers.findIndex(c=>['name','employee name','full name','employee_name'].includes(c));const hasHeader=column>=0;if(!hasHeader)column=0;if(!hasHeader&&nonempty.some(r=>r.length>1))throw Error('For multiple columns include an Employee Name header.');const seen=new Set(existing.map(n=>n.trim().toLocaleLowerCase()));return nonempty.slice(hasHeader?1:0).map((r,i)=>{const name=(r[column]||'').replace(/^﻿/,'').trim().replace(/\s+/g,' ');let issue='';const key=name.toLocaleLowerCase();if(!name)issue='Name required';else if(name.length>120||/[<>\x00-\x1f]/.test(name)||/^[=+@]/.test(name))issue='Invalid name';else if(seen.has(key))issue='Duplicate name — review separately';if(!issue)seen.add(key);return {name,row:i+(hasHeader?2:1),issue}})}
+/* Columns an uploaded list may carry. Only the employee name is required. */
+const csvColumns={
+designation:['designation','role','job title','position'],
+grade:['grade','pay grade'],
+dept:['department','dept','unit','department / unit'],
+location:['work location','location','site'],
+employmentType:['employment type','employment'],
+joiningDate:['joining date','proposed joining date','date of joining'],
+offerRef:['offer reference','offer ref','offer id'],
+offerDate:['offer date'],
+email:['personal email','email','email address'],
+phone:['mobile','phone','mobile number','contact number'],
+dob:['date of birth','dob'],
+address:['address','correspondence address'],
+manager:['reporting manager','manager','reports to'],
+coordinator:['onboarding coordinator','coordinator'],
+experienced:['has previous employment','previous employment','experienced'],
+screening:['background checks','screening'],
+workAuth:['work authorisation','work authorization'],
+licence:['professional licence','professional license','licence'],
+security:['security clearance','clearance'],
+relocating:['relocation','relocation support','relocating']};
+const csvFlags=['experienced','screening','workAuth','licence','security','relocating'];
+const employmentTypes=['Permanent executive','Permanent non-executive','Fixed-term contract','Agency contract','Apprentice / trainee'];
+
+function parse(text,existing=[]){if(text.length>200000)throw Error('Use a file smaller than 200 KB.');const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}else if(c===','&&!quoted){row.push(cell);cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell=''}else cell+=c}if(quoted)throw Error('Unclosed quotation mark. Please check your CSV file.');row.push(cell);rows.push(row);const nonempty=rows.filter(r=>r.some(c=>c.trim()));if(nonempty.length>501)throw Error('Upload at most 500 employees at a time.');const headers=nonempty[0]?.map(c=>c.replace(/^﻿/,'').trim().toLowerCase())||[];let column=headers.findIndex(c=>['name','employee name','full name','employee_name'].includes(c));const hasHeader=column>=0;if(!hasHeader)column=0;if(!hasHeader&&nonempty.some(r=>r.length>1))throw Error('For multiple columns include an Employee Name header.');const seen=new Set(existing.map(n=>n.trim().toLocaleLowerCase()));const columns={};for(const [key,names] of Object.entries(csvColumns)){const at=headers.findIndex(h=>names.includes(h));if(at>=0)columns[key]=at}
+return nonempty.slice(hasHeader?1:0).map((r,i)=>{const name=(r[column]||'').replace(/^﻿/,'').trim().replace(/\s+/g,' ');let issue='';const key=name.toLocaleLowerCase();if(!name)issue='Name required';else if(name.length>120||/[<>\x00-\x1f]/.test(name)||/^[=+@]/.test(name))issue='Invalid name';else if(seen.has(key))issue='Duplicate name — review separately';if(!issue)seen.add(key);const fields={};
+if(hasHeader)for(const key of Object.keys(columns)){const raw=String(r[columns[key]]||'').replace(/^\uFEFF/,'').trim();if(!raw)continue;
+if(key==='employmentType'){const match=employmentTypes.find(t=>t.toLowerCase()===raw.toLowerCase());if(match)fields[key]=match;else if(!issue)issue='Unknown employment type: '+raw;continue}
+if(key==='joiningDate'||key==='offerDate'||key==='dob'){if(/^\d{4}-\d{2}-\d{2}$/.test(raw))fields[key]=raw;else if(!issue)issue='Use YYYY-MM-DD dates';continue}
+if(csvFlags.includes(key)){fields[key]=/^(y|yes|true|1)$/i.test(raw);continue}
+if(key==='phone'){if(/^\+?[0-9][0-9 ()-]{4,19}$/.test(raw))fields[key]=raw;else if(!issue)issue='Invalid mobile number';continue}
+if(/[<>\x00-\x1f]/.test(raw)||/^[=+@]/.test(raw)){if(!issue)issue='Invalid value in '+key;continue}
+fields[key]=raw.slice(0,200)}
+return {name,row:i+(hasHeader?2:1),issue,fields}})}
 
 /* ---------------------------------------------------------------------------
    Onboarding process model: one case, one checklist, one chain.
@@ -77,7 +111,6 @@ const checklist=[
 
 const groups=[...new Set(checklist.map(i=>i.group))];
 const states=['Pending','Submitted','Verified','Failed','Waived'];
-const employmentTypes=['Permanent executive','Permanent non-executive','Fixed-term contract','Agency contract','Apprentice / trainee'];
 const closed=s=>s==='Verified'||s==='Waived';
 
 function flagsOf(record){return {experienced:!!record.experienced,workAuth:!!record.workAuth,licence:!!record.licence,security:!!record.security,relocating:!!record.relocating,screening:record.screening!==false}}
@@ -516,9 +549,14 @@ return card('Employee onboarding',`
 <div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Upload employee list',"onboardingUpload()",'primary')}</div></div>
 <div class="onboard-note">Cases start from an uploaded employee list. Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
-<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
+<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"onboardingTemplate()")}</div>
 ${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Upload an employee list, or load the sample joiners.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
+
+global.onboardingTemplate=function(){
+const header=['Employee Name','Designation','Grade','Department','Work Location','Employment Type','Joining Date','Offer Reference','Offer Date','Personal Email','Mobile','Date of Birth','Address','Reporting Manager','Has Previous Employment','Background Checks','Work Authorisation','Professional Licence','Security Clearance','Relocation'];
+const example=['Aditi Roy','Process Engineer','E2','Process engineering','Numaligarh refinery','Permanent executive','2027-01-05','OFR-2027-0001',today(),'aditi.roy@example.invalid','+91 90000 00001','1998-04-02','Golaghat district, Assam','Rajesh Kumar','Yes','Yes','No','No','No','No'];
+download('onboarding-template.csv',[header,example].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n')+'\n')};
 
 global.onboardingView=function(v){if(!permitted())return;state.onboardingView=v;render()};
 
@@ -965,13 +1003,25 @@ if(!persist('Onboarding question recorded for '+r.name+' on '+item.name,()=>{sta
 render();onboardingDetail(id);toast('Recorded on the case.')};
 
 /* ---------- bulk upload ---------- */
+const describeFields=fields=>{const f=fields||{};const parts=[];
+if(f.designation)parts.push(f.designation+(f.grade?' · '+f.grade:''));
+if(f.dept)parts.push(f.dept);
+if(f.joiningDate)parts.push('joining '+f.joiningDate);
+if(f.relocating)parts.push('relocation');
+return parts.length?parts.join(' · '):'Name only'};
+
 global.onboardingUpload=function(){if(!permitted())return;preview=[];fileName='';reading++;caseModal('Upload employee list',`<p>Create one onboarding case per name. Open each case afterwards and complete the employee information before the offer goes out.</p><label class="field">Employee list<input id="onboardFile" type="file" accept=".csv,.txt,text/csv,text/plain" onchange="onboardingRead(this.files[0])"></label><p class="sub">Maximum 200 KB and 500 employees. Excel files: save as CSV first.</p><div id="onboardPreview" aria-live="polite"></div>`,btn('Cancel',"$('#dialog').close()")+`<button class="primary" id="onboardStart" onclick="onboardingStart()" disabled>Start onboarding</button>`)};
 
-global.onboardingRead=async function(file){if(!permitted())return;const token=++reading;preview=[];$('#onboardStart').disabled=true;if(!file)return;fileName=file.name;try{if(!/\.(csv|txt)$/i.test(file.name))throw Error('Choose a CSV or TXT file.');if(file.size>200000)throw Error('Use a file smaller than 200 KB.');const content=await file.text();if(token!==reading||!permitted()||!$('#onboardPreview'))return;preview=parse(content,records().map(r=>r.name));const valid=preview.filter(r=>!r.issue);$('#onboardPreview').innerHTML=`<h3>Review ${esc(fileName)}</h3><p>${valid.length} ready · ${preview.length-valid.length} excluded</p><p class="sub">Duplicates and invalid rows will be skipped. Namesakes can be reviewed separately when employee identifiers are added.</p><div class="tablewrap" style="max-height:280px;overflow:auto"><table><thead><tr><th>ROW</th><th>EMPLOYEE NAME</th><th>RESULT</th></tr></thead><tbody>${preview.map(r=>`<tr><td>${r.row}</td><td data-i18n-user>${esc(r.name)}</td><td>${r.issue?esc(r.issue):'Ready'}</td></tr>`).join('')}</tbody></table></div>`;$('#onboardStart').disabled=!valid.length;$('#onboardStart').textContent='Start onboarding ('+valid.length+')'}catch(e){if(token===reading&&$('#onboardPreview'))$('#onboardPreview').textContent=e.message}};
+global.onboardingRead=async function(file){if(!permitted())return;const token=++reading;preview=[];$('#onboardStart').disabled=true;if(!file)return;fileName=file.name;try{if(!/\.(csv|txt)$/i.test(file.name))throw Error('Choose a CSV or TXT file.');if(file.size>200000)throw Error('Use a file smaller than 200 KB.');const content=await file.text();if(token!==reading||!permitted()||!$('#onboardPreview'))return;preview=parse(content,records().map(r=>r.name));const valid=preview.filter(r=>!r.issue);$('#onboardPreview').innerHTML=`<h3>Review ${esc(fileName)}</h3><p>${valid.length} ready · ${preview.length-valid.length} excluded</p><p class="sub">Duplicates and invalid rows will be skipped. Namesakes can be reviewed separately when employee identifiers are added.</p><div class="tablewrap" style="max-height:280px;overflow:auto"><table><thead><tr><th>ROW</th><th>EMPLOYEE NAME</th><th>DETAILS IN THE FILE</th><th>RESULT</th></tr></thead><tbody>${preview.map(r=>`<tr><td>${r.row}</td><td data-i18n-user>${esc(r.name)}</td><td><small>${esc(describeFields(r.fields))}</small></td><td>${r.issue?esc(r.issue):'Ready'}</td></tr>`).join('')}</tbody></table></div>`;$('#onboardStart').disabled=!valid.length;$('#onboardStart').textContent='Start onboarding ('+valid.length+')'}catch(e){if(token===reading&&$('#onboardPreview'))$('#onboardPreview').textContent=e.message}};
 
 global.onboardingStart=function(){if(!permitted()||!preview.length)return;const existing=new Set(records().map(r=>r.name.toLocaleLowerCase()));const ready=preview.filter(r=>!r.issue&&!existing.has(r.name.toLocaleLowerCase()));if(!ready.length)return;const previous=state.onboarding||[];const stamp=now();const batch=crypto.randomUUID();
-const created=ready.map(r=>{const record=ensure({id:'ONB-'+crypto.randomUUID(),batch,name:r.name,started:stamp,by:person().name,stage:1,acceptance:null,items:{},history:[],needsInfo:true,coordinator:person().name,screening:true,experienced:true});log(record,'Offer issued from the uploaded employee list. Employee information is incomplete.');return record});
+const created=ready.map(r=>{const fields=r.fields||{};
+const complete=!!(fields.designation&&fields.grade&&fields.dept&&fields.joiningDate&&fields.employmentType);
+const record=ensure(Object.assign({id:'ONB-'+crypto.randomUUID(),batch,name:r.name,started:stamp,by:person().name,stage:1,acceptance:null,items:{},history:[],coordinator:person().name,screening:true,experienced:true,offerDate:today()},fields,{needsInfo:!complete}));
+log(record,complete?'Offer issued from the uploaded employee list, with the employee information the file carried.':'Offer issued from the uploaded employee list. Employee information is incomplete.');
+return record});
 state.onboarding=[...created,...previous];
 if(!persist('Onboarding batch initiated: '+created.length+' employees',()=>{state.onboarding=previous}))return;
-preview=[];$('#dialog').close();render();toast(created.length+' onboarding cases created. Complete the employee information on each case.')};
+preview=[];$('#dialog').close();render();const incomplete=created.filter(r=>r.needsInfo).length;
+toast(created.length+' onboarding case(s) created.'+(incomplete?' Complete the employee information on '+incomplete+' of them.':' Every case carried its employee information.'))};
 })(typeof window!=='undefined'?window:globalThis);
