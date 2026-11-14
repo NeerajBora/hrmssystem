@@ -346,9 +346,9 @@ sample(10,{name:'Farhana Ahmed',designation:'Graduate Engineer Trainee',grade:'E
 sample(11,{name:'Deepak Boro',designation:'Laboratory Chemist',dept:'Quality control',email:'deepak.boro@example.invalid',phone:'+91 90000 10011',dob:'1995-05-21',joiningDate:'2026-12-22',stage:1,acceptance:'No',started:'26/10/2026, 4:05 pm'},1,null,
 [['29/10/2026, 6:20 pm','Offer declined by the joiner. Case stopped; onboarding does not start.'],['26/10/2026, 4:05 pm','Offer issued. Offer email sent to the joiner with one link.']]),
 
-sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Materials and procurement',email:'nabanita.devi@example.invalid',phone:'+91 90000 10012',dob:'1996-10-09',joiningDate:'2026-11-30',stage:3,acceptance:'Yes',security:true},2,
-{d_identity:{state:'Verified'},d_education:{state:'Verified'},d_bank:{state:'Submitted'},c_medical:{state:'Verified'},s_agreement:{state:'Verified'},c_security:{state:'Submitted',note:'Security clearance request sent to the competent authority'}},
-[['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
+sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Materials and procurement',email:'nabanita.devi@example.invalid',phone:'+91 90000 10012',dob:'1996-10-09',joiningDate:'2026-11-30',stage:3,acceptance:'Yes',security:true},3,
+{c_security:{state:'Verified',note:'Security clearance received from the competent authority'}},
+[['30/10/2026, 4:40 pm','All documents and checks verified. Awaiting the joiner confirmation.'],['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
 
 const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
