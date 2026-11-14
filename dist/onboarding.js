@@ -347,6 +347,10 @@ accommodation:'<path d="M4 18v-7m0 7h16v-5a3 3 0 0 0-3-3H4m0-4v4"/><circle cx="8
 goods:'<path d="M4 8.5 12 5l8 3.5v7L12 19l-8-3.5z"/><path d="M4 8.5 12 12l8-3.5M12 12v7"/>',
 local:'<path d="M5 16h14M6.5 16V9.8L8 6.5h8l1.5 3.3V16"/><circle cx="8.3" cy="16.6" r="1.4"/><circle cx="15.7" cy="16.6" r="1.4"/>',
 bank:'<path d="M4 9.5 12 5l8 4.5M5.5 10v7M10 10v7M14 10v7M18.5 10v7M4 19.5h16"/>',
+identity:'<circle cx="12" cy="9" r="3.2"/><path d="M5.5 19c.9-3 3.4-4.6 6.5-4.6s5.6 1.6 6.5 4.6"/>',
+mail:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/>',
+pattern:'<circle cx="12" cy="12" r="7.5"/><path d="M12 7.5V12l3 2"/>',
+profile:'<path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"/><path d="M14 3.5V8h4M9 13h6M9 16.5h4"/>',
 pan:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M7 10h4M7 13.5h7"/>',
 aadhaar:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 15.5c.6-1.3 1.7-2 3-2s2.4.7 3 2M15 10h3M15 13h3"/>'};
 const stepIcon=id=>`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${stepIcons[id]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
@@ -803,6 +807,30 @@ ${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state=
 ${cleared?`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`
 :`<div class="callout">Compensation stays locked until the identity and bank checks pass. ${checks.length-passed} of ${checks.length} still open.</div>`}`}
 
+/* HR record: the identifiers, the pattern and the profile, as one run. */
+function recordBoard(r,out,run){
+const agent=r.patternAgent||{state:'Not run'};
+const pattern=agentPattern(r);
+const steps=[
+{id:'identity',name:'Employee identifier issued',done:!!r.employeeId,note:r.employeeId||'',by:r.employeeId?'Onboarding agent':''},
+{id:'mail',name:'Work email issued',done:!!r.companyEmail,note:r.companyEmail||'',by:r.companyEmail?'Onboarding agent':''},
+{id:'pattern',name:'Working pattern drafted',done:agent.state==='Drafted'||!!r.profile,
+note:pattern?pattern.shift+' · '+pattern.workHours:out.shift+' · '+out.workHours+' (from the '+(out.templateName||'template')+')',
+by:agent.state==='Drafted'?'Profile agent':(r.profile?'Template':'')},
+{id:'profile',name:'Profile created in People & Service Records',done:!!r.profile,
+note:r.profile?'Created '+r.profile.createdOn+' by '+r.profile.createdBy:'Created when this workflow is released',by:''}];
+const done=steps.filter(x=>x.done).length;
+const first=steps.findIndex(x=>!x.done);
+return `<h3>Employee record</h3>
+<div class="onb-head"><span class="badge ${done===steps.length?'ok':'warn'}">${done===steps.length?'All '+steps.length+' steps done':'Step '+(first+1)+' of '+steps.length}</span><small>${done} done · ${steps.length-done} to go</small><span class="onb-progress"><i style="width:${Math.round(done/steps.length*100)}%"></i></span></div>
+${agent.state==='Running'?'<div class="callout">The profile agent is drafting the working pattern…</div>':''}
+${agent.state==='Unavailable'?`<div class="callout">The profile agent is not reachable: ${esc(agent.note||'')} The template pattern is used instead.</div>`:''}
+${agent.state==='Drafted'&&pattern?`<div class="callout">Pattern drafted by the profile agent using ${esc(agent.model||pattern.model||'the configured model')}. ${esc(pattern.rationale||'')}</div>`:''}
+<ol class="onb-board">${steps.map((step,i)=>boardRow(step,{state:step.done?'Verified':'Pending',note:step.note,by:step.by,date:''},
+step.id==='pattern'&&run.state!=='Released'?btn(agent.state==='Drafted'?'Run again':'Run the agent',`onboardingAgentDraft('${r.id}',true)`,'link'):'',i===first,i)).join('')}</ol>
+${profilePairs([['Template',(pattern?'Drafted by the profile agent':out.templateName)||'Not recorded'],['Working pattern',pattern?pattern.shift:out.shift],['Work hours',pattern?pattern.workHours:out.workHours],['Hours per week',String(pattern?pattern.weeklyHours:out.weeklyHours)],['Weekly off',pattern?pattern.weeklyOff:out.weeklyOff],['Attendance scheme',pattern?pattern.attendanceScheme:out.attendanceScheme],['Probation ends',out.probationEnd||'Not applicable'],['Leave entitlement',out.leaveEntitlement],['Access',(pattern?['HRMS self-service','Attendance','Payroll documents'].concat(pattern.access||[]):out.access).join(', ')]])}
+<div class="callout">Releasing creates the employee profile in People &amp; Service Records.</div>`}
+
 /* Relocation as a board: every task, what the agent arranged, what is still
    waiting. Booked here means recorded as arranged, never a real booking. */
 const taskState=(out,id)=>((out.states||{})[id]||{state:'Pending',note:''});
@@ -919,7 +947,7 @@ const run=r.workflows[runId],out=run.output;
 let body='';
 if(runId==='finance')body=financeBoard(r,out,run);
 else if(runId==='logistics')body=out.needed?relocationBoard(r,out,run):'<div class="callout">The joiner answered that relocation is not needed, so this workflow has nothing to do.</div>';
-else body=`${profilePairs([['Employee ID',r.employeeId],['Work email',r.companyEmail],['Template',out.templateName],['Working pattern',out.shift],['Work hours',out.workHours],['Weekly off',out.weeklyOff],['Probation ends',out.probationEnd||'Not applicable'],['Leave entitlement',out.leaveEntitlement],['Access',out.access.join(', ')]])}<div class="callout">Releasing creates the employee profile in People &amp; Service Records.</div>`;
+else body=recordBoard(r,out,run);
 const blocked=runId==='finance'&&!financeCleared(run);
 modal(workflowNames[runId],body,btn('Close',`onboardingDetail('${id}')`)+(run.state==='Drafted'?(blocked?'<button disabled title="The identity and bank checks have to pass first">Release</button>':btn('Release',`onboardingReleaseRun('${id}','${runId}')`,'primary')):''))};
 
@@ -1020,7 +1048,7 @@ global.onboardingAgentDraft=async function(id,manual){
 const r=find(id);if(!r||!permitted())return;
 if(agentBusy(r.patternAgent))return toast('That agent is already running.');
 const token=Date.now();r.patternAgent={state:'Running',ranOn:now(),startedAt:token};
-if(manual){render();onboardingDetail(id)}
+if(manual){render();if(r.workflows&&r.workflows.hr)onboardingWorkflow(id,'hr');else onboardingDetail(id)}
 let outcome;
 try{
 const response=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1036,7 +1064,7 @@ current.patternAgent=outcome;
 if(outcome.state==='Drafted')log(current,'Profile agent drafted a working pattern: '+outcome.pattern.shift+', '+outcome.pattern.workHours);
 else log(current,'Profile agent unavailable · '+outcome.note+' The template pattern is used instead.');
 try{save()}catch{}
-render();if(manual)onboardingDetail(id);
+render();if(manual){const live=find(id);if(live&&live.workflows&&live.workflows.hr)onboardingWorkflow(id,'hr');else onboardingDetail(id)}
 if(manual)toast(outcome.state==='Drafted'?'Profile agent drafted the pattern.':outcome.note)};
 
 const agentPattern=r=>r.patternAgent&&r.patternAgent.state==='Drafted'?r.patternAgent.pattern:null;
