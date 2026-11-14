@@ -27,3 +27,49 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .ask-launch{position:fixed;bottom:24px;right:24px;z-index:90;background:#132a54;color:white;border:1px solid #ffda00;border-radius:30px;padding:15px 22px;box-shadow:0 6px 25px #132a5433}.ask-panel{position:fixed;right:20px;bottom:20px;width:420px;max-width:calc(100vw - 24px);height:680px;max-height:calc(100dvh - 36px);background:white;border:1px solid #dbe4ef;border-radius:18px;box-shadow:0 12px 60px #132a5440;z-index:95;display:flex;flex-direction:column;overflow:hidden}.ask-panel header{background:#132a54;color:white;padding:18px;display:flex;justify-content:space-between;align-items:center}.ask-panel header small{display:block;margin-top:5px;color:#ffdf56}.ask-panel header button{color:white;background:transparent;border:0;font-size:24px}.ask-scope{background:#f0f4fa;padding:12px 18px;font-size:11px;line-height:1.7}.ask-log{flex:1;overflow:auto;padding:18px;min-height:100px}.ask-log article{padding:13px;background:#f1f5fb;border-radius:12px;margin-bottom:14px}.ask-log .ask-user{background:#fff5c4;margin-left:30px}.ask-log p{white-space:pre-wrap;line-height:1.6;font-size:13px;margin:6px 0}.ask-log small{font-weight:bold;font-size:11px}.ask-chips{display:flex;gap:6px;overflow:auto;padding:10px 14px;flex-shrink:0}.ask-chips button{white-space:nowrap;font-size:11px;border-radius:20px}.ask-panel form{display:flex;gap:8px;padding:12px;border-top:1px solid #e0e6ef}.ask-panel input{min-width:0;flex:1;padding:12px}.ask-panel form button{background:#ffda00;color:#132a54}.ask-panel footer{font-size:10px;color:#68788d;padding:0 14px 12px}.ask-log button{font-size:12px;margin-top:8px}@media(max-width:600px){.ask-panel{bottom:12px;right:12px}.ask-launch{bottom:16px;right:16px}}
 
 .onboard-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px;background:linear-gradient(120deg,#edf3fc,#fff)}.onboard-intro h3{margin:10px 0;font-size:23px;color:#132a54}.onboard-intro p{max-width:600px;line-height:1.6;color:#64758d}.onboard-note{padding:16px 24px;border-top:3px solid #ffda00;font-size:12px;color:#64758d}@media(max-width:650px){.onboard-intro{align-items:flex-start;flex-direction:column}}
+
+/* Onboarding: case list, stage tracker and checklist */
+.badge.ok{background:#e7f2e8;color:#39714c}
+.badge.warn{background:#fff5cf;color:#795e10}
+.badge.bad{background:#fbece5;color:#a14925}
+.badge.info{background:#e9eef8;color:#48618c}
+.onboard-intro .actions{display:flex;gap:10px;flex-wrap:wrap}
+.onb-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;padding:20px 24px 4px}
+.onb-metrics .stat strong{font-size:24px}
+.onb-track{list-style:none;display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:18px 0 10px;padding:0}
+.onb-track li{position:relative;padding-top:24px;font-size:10px;line-height:1.35;color:var(--muted)}
+.onb-track li::before{content:'';position:absolute;top:9px;left:0;right:0;height:2px;background:#e3e7ee}
+.onb-track li.done::before,.onb-track li.current::before{background:#ffda00}
+.onb-track li span{position:absolute;top:0;left:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#eef0f4;color:#656b75;font-size:10px;font-weight:700}
+.onb-track li.done span{background:#e7f2e8;color:#39714c}
+.onb-track li.current span{background:#132a54;color:#fff}
+.onb-track li.current strong{color:#132a54}
+.onb-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 4px}
+.onb-progress{flex:1;min-width:140px;height:6px;border-radius:3px;background:#eef0f4;overflow:hidden}
+.onb-progress i{display:block;height:100%;background:#39714c}
+.onb-actions{padding:14px 0}
+.onb-group{border:1px solid var(--line);border-radius:8px;margin-bottom:10px;overflow:hidden}
+.onb-group summary{cursor:pointer;padding:12px 14px;font-size:12px;font-weight:600;background:#f7f8fa;display:flex;justify-content:space-between;gap:12px}
+.onb-group summary span{font-weight:400;color:var(--muted)}
+.onb-group table{font-size:11px}
+.onb-rowactions{white-space:nowrap}
+.onb-hard{font-style:normal;font-size:9px;padding:2px 5px;border-radius:4px;background:#fbece5;color:#a14925;margin-left:6px}
+.onb-soft{font-style:normal;font-size:9px;padding:2px 5px;border-radius:4px;background:#eef0f4;color:#656b75;margin-left:6px}
+.onb-thread{margin-top:4px;padding-left:8px;border-left:2px solid #e3e7ee}
+.onb-history{max-height:220px;overflow:auto;font-size:11px;line-height:1.6}
+.onb-flags{display:grid;gap:8px;margin-bottom:16px}
+.onb-flag{display:flex;align-items:center;gap:9px;font-size:12px}
+.onb-flag input{width:16px;height:16px}
+.onb-error{color:#a14925;font-size:12px;min-height:16px}
+@media(max-width:900px){.onb-metrics{grid-template-columns:1fr 1fr}.onb-track{grid-template-columns:1fr 1fr}.onb-track li{padding-left:28px;padding-top:0}.onb-track li::before{display:none}}
+.onb-group table{table-layout:fixed;white-space:normal}
+.onb-group td,.onb-group th{vertical-align:top}
+.onb-group td:nth-child(4){overflow-wrap:anywhere}
+.onb-group .badge{white-space:nowrap}
+.onb-group th:nth-child(1){width:30%}
+.onb-group th:nth-child(2){width:7%}
+.onb-group th:nth-child(3){width:12%}
+.onb-group th:nth-child(4){width:36%}
+.onb-group th:nth-child(5){width:15%}
+.onb-group .onb-rowactions{white-space:normal}
+.onb-group .onb-rowactions button{padding:0;margin-right:10px}

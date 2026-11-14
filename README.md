@@ -15,7 +15,7 @@ Requires Node.js (modern version with fetch support).
 - Employee reporting hierarchy, including direct and indirect reports.
 - Real Gemini chat in English, Hindi and Hinglish, navigation guidance, conversational request drafts, and review before submission.
 - Demo assistant guardrails and context filtering; these do not replace production authorisation.
-- HR Employee Services onboarding CSV/TXT upload, preview, duplicate checks and individual Initiated records. Subsequent stages await process definition.
+- HR Employee Services onboarding: new-employee intake form, CSV/TXT upload with preview and duplicate checks, and a full eight-stage onboarding case per joiner.
 
 The static translation system and mock connector statuses are distinct from the live AI endpoint. No live payroll, payments, attendance devices or shared employee database are connected.
 
@@ -24,6 +24,21 @@ Eight demo roles; local request creation and drafts; leave validation and balanc
 
 ## Limits
 Fictional data only. No backend authentication, server-side authorisation, encryption, real payroll, integrations, file storage, notifications, offline synchronisation, or production delegation. Hindi interface localisation covers all application modules, forms, menus, dialogs and notifications with a bundled language pack. Names, IDs, email addresses and free-form comments remain original. Performance, recruitment, promotion, retirement, and confidential grievance processing need further implementation. Transfer stages can all be demonstrated by HR; production separation of duties is not enforced. Policy and payroll examples are not legal or statutory rules. Accessibility is a design target, not a certification.
+
+## Employee onboarding
+HR Employee Services carries one onboarding case per joiner, from offer issued to onboarding complete. Add new employee records personal information, offer and position details, and the checklist conditions that apply (previous employment, background checks, work authorisation, professional licence, security clearance, relocation). Uploading an employee list still creates one case per name, marked as incomplete information until the form is completed.
+
+Eight stages run in order: offer issued, offer accepted, pre-joining in progress, ready to join, reported for joining, active employee, induction and role onboarding, onboarding complete. Onboarding does not start until offer acceptance is recorded; a decline stops the case. A stage advances only when every applicable item due at that stage is Verified or Waived, and each advance is confirmed by a person.
+
+The checklist covers joiner documents, background checks, joining conditions, employment documents, previous-employment transition, relocation and logistics, joining readiness, reporting day, activation, induction and completion. Each item carries a state (Pending, Submitted, Verified, Failed, Waived), a reason or note, and a question-and-reply thread, all logged with date and owner. A failed item does not stop the other items; medical fitness, work authorisation, professional licence, safety training, gate pass and SAP activation are hard blocks that stop the case until they are cleared. Items marked "if applicable" never block a stage.
+
+The HR list shows every case with its stage, status (Ready, In progress, Blocked, Pending follow-up, Complete), what is missing and who owns it, filtered to exceptions by default, with counts for offers out, accepted, joining this month, ready, blocked and pending follow-up, and a CSV export. An active employee with an open permitted follow-up reads as Pending follow-up, not complete.
+
+Twelve fictional sample joiners are seeded on a first visit and after a demonstration reset, spread across all eight stages and every status: blocked on a failed marksheet, blocked on an expired medical fitness certificate, blocked on work authorisation under verification, awaiting acceptance, a declined offer, ready to join, reported for joining, active with a pending follow-up, in induction, and complete. Reload sample joiners restores them; cases created here are kept and are not changed. These are illustrative people, not NRL employees.
+
+No live SAP, Saral Pravesh, bank, EPFO or TRACES connection exists in this demo, and no onboarding email or portal link is actually sent. Document lists, medical rules and approval limits are illustrative and are not NRL process definitions.
+
+Run onboarding checks with `node --test tests/onboarding.test.cjs`.
 
 ## Organisation messages
 The inbox icon beside the notification bell opens employee-scoped fictional compensation, team transfer, and promotion communications. It supports unread counts, type/search filters, document preview/download, receipt acknowledgement, threaded comments, browser-persistent comment drafts, Cancel (discard unsaved edits), Archive and Restore, and activity history. Submitted acknowledgements do not change pay, grade, team, or service records. No response is transmitted to a real HR service; existing browser-local demo storage is used. The user-supplied reference image was used only for layout and is not included in the site.
