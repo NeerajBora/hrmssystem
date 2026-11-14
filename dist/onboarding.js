@@ -534,12 +534,13 @@ return `<h3>Employee record</h3>${profilePairs([['Employee ID',draft.id],['Templ
 const icon={
 info:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.4"/></svg>',
 history:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+checklist:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7l2 2 3-3M4 15l2 2 3-3M13 8h7M13 16h7"/></svg>',
 back:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>'};
 const iconButton=(name,label,fn)=>`<button class="onb-iconbtn" title="${label}" aria-label="${label}" onclick="${fn}">${icon[name]}<span>${label}</span></button>`;
 
 const body={
 overview:`
-<h3 data-i18n-user>${esc(r.name)}</h3>
+<h3 class="onb-name" data-i18n-user>${esc(r.name)}</h3>
 <div class="onb-head">${chip(s.status,tone(s.status))}<span class="onb-progress"><i style="width:${s.percent}%"></i></span><small>${s.done} of ${s.total} checklist items cleared</small></div>
 ${r.needsInfo?`<div class="callout">Employee information is incomplete for this case. ${btn('Add employee information',`onboardingNew('${r.id}')`,'link')}</div>`:''}
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
@@ -547,14 +548,13 @@ ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The c
 <ol class="onb-track">${track}</ol>
 <div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}</div>
 ${confirmPanel(r)}
-${profilePanel(r)}
-<button class="onb-open-checklist" onclick="onboardingDetail('${r.id}','checklist')"><span><strong>Checklist</strong><small>${s.done} of ${s.total} cleared${s.open.length?' · '+s.open.length+' open':''}</small></span><b>→</b></button>`,
+${profilePanel(r)}`,
 checklist:`<h3>Checklist · <span data-i18n-user>${esc(r.name)}</span></h3>${groupBlocks}`,
 info:`<h3>Employee information · <span data-i18n-user>${esc(r.name)}</span></h3>${info}`,
 history:`<h3>Activity history · <span data-i18n-user>${esc(r.name)}</span></h3><div class="onb-history">${r.history.map(e=>`<p><small data-i18n-user>${esc(e.date)} · ${esc(e.by||'')} · ${esc(e.action)}</small></p>`).join('')}</div>`};
 
 const foot=caseView==='overview'
-?`<div class="onb-footleft">${iconButton('info','Employee information',`onboardingDetail('${r.id}','info')`)}${iconButton('history','Activity history',`onboardingDetail('${r.id}','history')`)}</div>${btn('Close',"$('#dialog').close()")}`
+?`<div class="onb-footleft">${iconButton('info','Employee information',`onboardingDetail('${r.id}','info')`)}${iconButton('history','Activity history',`onboardingDetail('${r.id}','history')`)}${iconButton('checklist','Checklist',`onboardingDetail('${r.id}','checklist')`)}<small class="onb-footnote">${s.done} of ${s.total} cleared</small></div>${btn('Close',"$('#dialog').close()")}`
 :`<div class="onb-footleft"><button class="onb-back" onclick="onboardingDetail('${r.id}','overview')">${icon.back}Back</button></div>${btn('Close',"$('#dialog').close()")}`;
 
 modal('Onboarding workflow',body[caseView]||body.overview,foot);$('#dialog').classList.add('onb-dialog')};

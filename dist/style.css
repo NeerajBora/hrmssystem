@@ -91,11 +91,6 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onb-iconbtn{display:inline-flex;align-items:center;gap:7px;padding:8px 12px}
 .onb-iconbtn svg{display:block}
 .onb-back{display:inline-flex;align-items:center;gap:6px;padding:8px 14px}
-.onb-open-checklist{display:flex;align-items:center;justify-content:space-between;width:100%;padding:18px 20px;margin-top:26px;text-align:left;border:1px solid var(--line);border-radius:9px;background:#f7f8fa}
-.onb-open-checklist:hover{background:#eff2f7}
-.onb-open-checklist strong{display:block;font-size:13px;color:#132a54}
-.onb-open-checklist small{display:block;margin-top:4px;font-size:11px;color:var(--muted)}
-.onb-open-checklist b{font-size:15px;color:#132a54}
 .onb-dialog .onb-history{max-height:none}
 @media(max-width:650px){.onb-iconbtn span{display:none}}
 
@@ -124,3 +119,12 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onb-dialog .onb-track li span{top:50%;left:0;transform:translateY(-50%)}
 .onb-dialog .onb-track li.current span{top:50%;left:-3px}
 }
+
+/* Onboarding workflow: the joiner and the status read first. */
+.onb-dialog .modalbody>h3.onb-name{font:800 26px/1.2 Manrope;letter-spacing:-.6px;color:#132a54;margin:0 0 14px}
+.onb-dialog .onb-head{gap:14px}
+.onb-dialog .onb-head .badge{font-size:13px;font-weight:700;padding:8px 16px;border-radius:7px;line-height:1.4}
+.onb-dialog .onb-head small{font-size:12px;color:#5b6778}
+.onb-dialog .onb-progress{height:8px;border-radius:4px}
+.onb-footnote{font-size:11px;color:var(--muted);margin-left:4px}
+@media(max-width:650px){.onb-footnote{display:none}}
