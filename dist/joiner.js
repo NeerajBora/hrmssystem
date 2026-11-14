@@ -259,11 +259,7 @@ const m=model();
 if(r.submittedOn||!m.joinerComplete(r))return toast('Finish your documents and joining date first.');
 const previous=structuredClone(state.onboarding);
 r.submittedOn=stamp();
-m.runWorkflows(r,{emails:(state.onboarding||[]).map(c=>c.companyEmail).filter(Boolean),
-ids:people.map(p=>p.id).concat((state.onboarding||[]).map(c=>c.employeeId).filter(Boolean)),
-stamp:stamp()});
-log(r,'Onboarding submitted by the joiner. Finance, logistics and HR record workflows started.');
-for(const run of m.workflowStates(r))log(r,run.name+' · '+run.state+' by the onboarding agent');
+log(r,'Onboarding submitted by the joiner. Everything that is theirs to send is with HR.');
 sendNotice(r,'submitted');
 if(!persist(r,'Onboarding submitted by '+r.name,()=>{state.onboarding=previous}))return;
 refresh();toast('Submitted. Your setup has started.')};

@@ -399,7 +399,7 @@ body:'Dear '+name+', your offer for '+(record.designation||'the role')+' is atta
 if(kind==='documents')return {kind,subject:'Your onboarding checklist is open',
 body:'Dear '+name+', thank you for accepting. Please complete your profile in the joining portal: identity, education, bank, tax and statutory details, your joining date and whether you need relocation support.'};
 if(kind==='submitted')return {kind,subject:'We have received your documents',
-body:'Dear '+name+', your documents are with HR. Finance, logistics and HR record setup have started. We will write again when your HRMS access is ready.'};
+body:'Dear '+name+', your documents are with HR. We will write again once your record is set up and your HRMS access is ready.'};
 if(kind==='ready')return {kind,subject:'Your NRL HRMS access is ready',
 body:'Dear '+name+', your employee record is live. Employee ID '+(record.employeeId||'')+', work email '+(record.companyEmail||'')+'. Sign in to the HRMS portal with your employee ID to see your joining date, joining location and your first-week guidance.'};
 return {kind,subject:'Update on your onboarding',body:'Dear '+name+', there is an update on your onboarding.'}}
@@ -785,7 +785,7 @@ function workflowPanel(r){
 if(!r.workflows)return '';
 const runs=workflowStates(r);
 const rows=runs.map(run=>`<li><span><strong>${esc(run.name)}</strong><small>${esc(run.state)}</small></span>${run.state==='Drafted'?btn('Review',`onboardingWorkflow('${r.id}','${run.id}')`,'link'):chip(run.state,run.state==='Released'?'ok':'info')}</li>`).join('');
-return `<h3>Workflows started on submission</h3>
+return `<h3>Workflows started at Ready to join</h3>
 ${profilePairs([['Submitted by the joiner',r.submittedOn||'Not submitted'],['Employee ID',r.employeeId||'Not issued'],['Work email',r.companyEmail||'Not issued']])}
 <ul class="onb-runs">${rows}</ul>
 ${workflowsSettled(r)&&!r.accessReleasedOn?`<div class="toolbar onb-actions">${btn('Release HRMS access',`onboardingRelease('${r.id}')`,'primary')}</div>`:''}
@@ -1092,8 +1092,14 @@ const check=canAdvance(r);if(!check.ok)return toast(check.reason);
 const note=val('onbAdvanceNote'),previous=structuredClone(state.onboarding);
 r.stage=Math.min(8,r.stage+1);
 log(r,'Stage advanced to '+stageName(r.stage)+(note?' · '+note:''));
-if(r.stage>=4&&!r.employeeId){issueEmployeeId(r);log(r,'Employee identifier '+r.employeeId+' issued on reaching Ready to join')}
 const reachedReady=r.stage===4;
+if(reachedReady&&!r.workflows){
+runWorkflows(r,{emails:records().map(c=>c.companyEmail).filter(Boolean),
+ids:people.map(p=>p.id).concat(records().map(c=>c.employeeId).filter(Boolean)),
+stamp:now()});
+log(r,'Employee identifier '+r.employeeId+' and work email '+r.companyEmail+' issued on reaching Ready to join');
+for(const run of workflowStates(r))log(r,run.name+' · '+run.state+' by the onboarding agent')}
+if(r.stage>=4&&!r.employeeId)issueEmployeeId(r);
 if(!persist('Onboarding stage advanced for '+r.name+' to '+stageName(r.stage),()=>{state.onboarding=previous}))return;
 render();onboardingDetail(id);toast('Stage advanced to '+stageName(r.stage)+'.');
 if(reachedReady&&!r.patternAgent)onboardingAgentDraft(id)};
