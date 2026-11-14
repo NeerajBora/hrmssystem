@@ -73,3 +73,14 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onb-group th:nth-child(5){width:15%}
 .onb-group .onb-rowactions{white-space:normal}
 .onb-group .onb-rowactions button{padding:0;margin-right:10px}
+
+/* Onboarding case: a wider window, with the information in columns. */
+.onb-dialog{width:min(1180px,96vw);max-height:92vh}
+.onb-dialog .self-pairs{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 20px}
+.onb-dialog .modalbody>h3{margin:26px 0 12px;font-size:14px;color:#132a54}
+.onb-dialog .modalbody>h3:first-of-type{margin-top:0}
+.onb-outstanding{margin:0 0 18px;font-size:11px;color:#a14925}
+.onb-dialog .onb-track{margin:20px 0 12px}
+.onb-dialog .onb-group table{font-size:11.5px}
+.onb-dialog button[disabled]{opacity:.45;cursor:not-allowed}
+@media(max-width:900px){.onb-dialog{width:96vw;max-height:94vh}.onb-dialog .self-pairs{grid-template-columns:1fr 1fr}}
