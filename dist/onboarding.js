@@ -791,12 +791,13 @@ const passed=checks.filter(c=>checkState(out,c.id).state==='Verified').length;
 const cleared=financeCleared(run);
 const tone2=st=>st==='Verified'?'ok':st==='Failed'?'bad':'warn';
 return `<h3>Identity and bank verification</h3>
-<div class="onb-head"><span class="badge ${cleared?'ok':'warn'}">${passed} of ${checks.length} verified</span><span class="onb-progress"><i style="width:${checks.length?Math.round(passed/checks.length*100):0}%"></i></span></div>
+<div class="onb-head"><span class="badge ${cleared?'ok':'warn'}">${cleared?'All '+checks.length+' checks passed':'Step '+(checks.findIndex(c=>checkState(out,c.id).state!=='Verified')+1)+' of '+checks.length}</span><small>${passed} verified · ${checks.length-passed} to go</small><span class="onb-progress"><i style="width:${checks.length?Math.round(passed/checks.length*100):0}%"></i></span></div>
 ${agent.state==='Running'?'<div class="callout">The verification agent is checking the documents…</div>':''}
 ${agent.state==='Unavailable'?`<div class="callout">The verification agent is not reachable: ${esc(agent.note||'')} Mark a check by hand instead.</div>`:''}
 ${agent.state==='Drafted'?`<div class="callout">Checked by the verification agent using ${esc(agent.model||'the configured model')}, against what HR has recorded for each document. No account number, PAN or Aadhaar number is held in this demonstration or sent anywhere.</div>`:''}
-<ol class="onb-board">${checks.map(c=>{const st=checkState(out,c.id);
-return boardRow(c,Object.assign({},st,{note:st.note||'Document on the case: '+itemState(r,c.document)}),run.state==='Released'?chip(st.state,stepTone(st.state)):btn(st.state==='Verified'?'Reopen':'Mark verified',`onboardingFinanceCheck('${r.id}','${c.id}')`,'link'))}).join('')}</ol>
+<ol class="onb-board">${(()=>{const first=checks.findIndex(c=>checkState(out,c.id).state!=='Verified');
+return checks.map((c,i)=>{const st=checkState(out,c.id);
+return boardRow(c,Object.assign({},st,{note:st.note||'Document on the case: '+itemState(r,c.document)}),run.state==='Released'?chip(st.state,stepTone(st.state)):btn(st.state==='Verified'?'Reopen':'Mark verified',`onboardingFinanceCheck('${r.id}','${c.id}')`,'link'),i===first,i)}).join('')})()}</ol>
 ${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the verification agent again':'Run the verification agent',`onboardingFinanceAgent('${r.id}')`,cleared?'':'primary')}</div>`}
 <h3>Compensation</h3>
 ${cleared?`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`
@@ -806,10 +807,11 @@ ${cleared?`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGro
    waiting. Booked here means recorded as arranged, never a real booking. */
 const taskState=(out,id)=>((out.states||{})[id]||{state:'Pending',note:''});
 const stepTone=st=>st==='Verified'||st==='Booked'?'ok':st==='Failed'?'bad':'warn';
-function boardRow(step,st,action){
+function boardRow(step,st,action,current,index){
 const done=st.state==='Booked'||st.state==='Verified';
-return `<li class="${done?'done':st.state==='Failed'?'failed':'open'}">
-<span class="onb-step-icon">${done?tickIcon:stepIcon(step.id)}</span>
+const cls=done?'done':st.state==='Failed'?'failed':current?'current':'open';
+return `<li class="${cls}">
+<span class="onb-step-icon">${done?tickIcon:stepIcon(step.id)}<i class="onb-step-n">${index+1}</i></span>
 <div class="onb-step-body"><strong>${esc(step.name)}</strong>
 ${st.note?`<small>${esc(st.note)}</small>`:''}
 ${st.by?`<em>${esc(st.state)} · ${esc(st.by)} · ${esc(st.date||'')}</em>`:''}</div>
@@ -817,12 +819,13 @@ ${st.by?`<em>${esc(st.state)} · ${esc(st.by)} · ${esc(st.date||'')}</em>`:''}<
 function relocationBoard(r,out,run){
 const agent=r.logisticsAgent||{state:'Not run'};
 const done=out.tasks.filter(t=>taskState(out,t.id).state==='Booked').length;
-return `<div class="onb-head"><span class="badge ${done===out.tasks.length?'ok':'warn'}">${done} of ${out.tasks.length} arranged</span><span class="onb-progress"><i style="width:${Math.round(done/out.tasks.length*100)}%"></i></span></div>
+return `<div class="onb-head"><span class="badge ${done===out.tasks.length?'ok':'warn'}">${done===out.tasks.length?'All '+out.tasks.length+' steps done':'Step '+(out.tasks.findIndex(t=>taskState(out,t.id).state!=='Booked')+1)+' of '+out.tasks.length}</span><small>${done} arranged · ${out.tasks.length-done} to go</small><span class="onb-progress"><i style="width:${Math.round(done/out.tasks.length*100)}%"></i></span></div>
 ${agent.state==='Running'?'<div class="callout">The relocation agent is working through the list…</div>':''}
 ${agent.state==='Unavailable'?`<div class="callout">The relocation agent is not reachable: ${esc(agent.note||'')} Mark a task arranged by hand instead.</div>`:''}
 ${agent.state==='Drafted'?`<div class="callout">Planned by the relocation agent using ${esc(agent.model||'the configured model')}. Nothing is booked with a carrier, a guest house or a vendor: this records what the desk would arrange.</div>`:''}
-<ol class="onb-board">${out.tasks.map(t=>{const st=taskState(out,t.id);
-return boardRow(t,st,run.state==='Released'?chip(st.state,stepTone(st.state)):btn(st.state==='Booked'?'Reopen':'Mark arranged',`onboardingRelocationTask('${r.id}','${t.id}')`,'link'))}).join('')}</ol>
+<ol class="onb-board">${(()=>{const first=out.tasks.findIndex(t=>taskState(out,t.id).state!=='Booked');
+return out.tasks.map((t,i)=>{const st=taskState(out,t.id);
+return boardRow(t,st,run.state==='Released'?chip(st.state,stepTone(st.state)):btn(st.state==='Booked'?'Reopen':'Mark arranged',`onboardingRelocationTask('${r.id}','${t.id}')`,'link'),i===first,i)}).join('')})()}</ol>
 ${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the relocation agent again':'Run the relocation agent',`onboardingRelocationAgent('${r.id}')`,'primary')}</div>`}`}
 
 global.onboardingFinanceCheck=function(id,checkId){if(!permitted())return;const r=find(id);if(!r)return;

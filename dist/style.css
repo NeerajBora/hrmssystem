@@ -255,3 +255,21 @@ transition:background .15s ease,border-color .15s ease}
 .onb-board li.failed .onb-step-body strong{color:#a14925}
 .onb-step-action{flex:0 0 auto;padding-top:9px}
 .onb-step-action button{min-width:0;min-height:0;padding:0;font-size:11px;font-weight:700}
+
+/* Vertical step indicator: the rail fills as each step clears. */
+.onb-board li{padding-bottom:28px}
+.onb-board li::before{left:21px;top:42px;width:3px;border-radius:2px;background:#e6e9ef}
+.onb-board li.done::before{background:#1f7a4d}
+.onb-board li.current::before{background:linear-gradient(#132a54 0 14px,#e6e9ef 14px 100%)}
+.onb-step-icon{position:relative;flex:0 0 44px;width:44px;height:44px;background:#f2f4f8;color:#8794a8;box-shadow:0 0 0 3px #fff,0 0 0 4px #e6e9ef}
+.onb-board li.done .onb-step-icon{background:#1f7a4d;color:#fff;box-shadow:0 0 0 3px #fff,0 0 0 4px #1f7a4d}
+.onb-board li.current .onb-step-icon{background:#132a54;color:#fff;box-shadow:0 0 0 3px #fff,0 0 0 6px #ffda00}
+.onb-board li.failed .onb-step-icon{background:#a14925;color:#fff;box-shadow:0 0 0 3px #fff,0 0 0 4px #f0cfc3}
+.onb-step-n{position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid #e6e9ef;color:#8794a8;font:800 10px Manrope;font-style:normal;display:grid;place-items:center}
+.onb-board li.done .onb-step-n{background:#1f7a4d;border-color:#1f7a4d;color:#fff}
+.onb-board li.current .onb-step-n{background:#ffda00;border-color:#e6c900;color:#132a54}
+.onb-board li.failed .onb-step-n{background:#a14925;border-color:#a14925;color:#fff}
+.onb-step-body{padding-top:11px}
+.onb-board li.current .onb-step-body strong{color:#132a54}
+.onb-step-action{padding-top:13px}
+.onb-dialog .onb-head small{font-size:11.5px;color:var(--muted)}
