@@ -128,3 +128,37 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onb-dialog .onb-progress{height:8px;border-radius:4px}
 .onb-footnote{font-size:11px;color:var(--muted);margin-left:4px}
 @media(max-width:650px){.onb-footnote{display:none}}
+
+/* Onboarding workflow: one button size throughout the window. */
+.onb-buttons .onb-actions button,
+.onb-buttons .modalfoot button{
+min-height:42px;
+min-width:168px;
+padding:0 20px;
+border-radius:8px;
+font-size:12.5px;
+font-weight:700;
+display:inline-flex;
+align-items:center;
+justify-content:center;
+gap:8px;
+white-space:nowrap;
+transition:background .15s ease,border-color .15s ease}
+.onb-buttons .onb-actions{gap:12px;padding:22px 0 4px}
+.onb-buttons .modalfoot{gap:12px;padding:16px 25px}
+.onb-buttons .onb-footleft{gap:12px}
+.onb-buttons .onb-iconbtn{min-width:168px;justify-content:center;padding:0 18px}
+.onb-buttons .onb-back{min-width:168px;justify-content:center}
+.onb-buttons .onb-actions button:hover:not([disabled]),
+.onb-buttons .modalfoot button:hover:not([disabled]){background:#f2f5f9}
+.onb-buttons .onb-actions .primary:hover,
+.onb-buttons .modalfoot .primary:hover{background:#f2d300}
+.onb-buttons .modalhead button{min-width:0;min-height:0;padding:5px 9px}
+.onb-buttons .onb-group button{min-width:0;min-height:0;padding:0;font-size:11px;font-weight:600}
+@media(max-width:650px){
+.onb-buttons .onb-actions button,.onb-buttons .modalfoot button{min-width:0;width:100%}
+.onb-buttons .onb-footleft{flex:1;flex-wrap:wrap}
+.onb-buttons .onb-iconbtn{min-width:0;width:auto;justify-content:center}}
+
+.onb-buttons .modalfoot{justify-content:space-between}
+.onb-buttons .modalfoot:not(:has(.onb-footleft)){justify-content:flex-end}

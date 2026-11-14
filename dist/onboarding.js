@@ -343,6 +343,8 @@ global.Onboarding=model;
    HR interface. HR officer only. Fictional data, saved in this browser.
 --------------------------------------------------------------------------- */
 let preview=[],fileName='',reading=0;
+const caseModal=(title,body,foot,wide)=>{modal(title,body,foot);const d=$('#dialog');d.classList.add('onb-buttons');if(wide)d.classList.add('onb-dialog')};
+
 const permitted=()=>role==='HR officer'&&!signedOut;
 const now=()=>new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'});
 const today=()=>new Date().toISOString().slice(0,10);
@@ -400,7 +402,7 @@ global.onboardingView=function(v){if(!permitted())return;state.onboardingView=v;
 
 global.onboardingReseed=function(){if(!permitted())return;
 const own=records().filter(r=>!r.sample).length;
-modal('Reload sample joiners',`<p>This replaces the twelve fictional sample cases with fresh copies, so the screens show the original spread of stages and exceptions.</p><p class="sub">${own?own+' case(s) you created here are kept and are not changed.':'No cases created here, so nothing of your own is affected.'} Changes made to the sample cases in this browser are discarded.</p>`,
+caseModal('Reload sample joiners',`<p>This replaces the twelve fictional sample cases with fresh copies, so the screens show the original spread of stages and exceptions.</p><p class="sub">${own?own+' case(s) you created here are kept and are not changed.':'No cases created here, so nothing of your own is affected.'} Changes made to the sample cases in this browser are discarded.</p>`,
 btn('Cancel',"$('#dialog').close()")+btn('Reload samples',"onboardingReseedConfirm()",'primary'))};
 
 global.onboardingReseedConfirm=function(){if(!permitted())return;
@@ -557,7 +559,7 @@ const foot=caseView==='overview'
 ?`<div class="onb-footleft">${iconButton('info','Employee information',`onboardingDetail('${r.id}','info')`)}${iconButton('history','Activity history',`onboardingDetail('${r.id}','history')`)}${iconButton('checklist','Checklist',`onboardingDetail('${r.id}','checklist')`)}<small class="onb-footnote">${s.done} of ${s.total} cleared</small></div>${btn('Close',"$('#dialog').close()")}`
 :`<div class="onb-footleft"><button class="onb-back" onclick="onboardingDetail('${r.id}','overview')">${icon.back}Back</button></div>${btn('Close',"$('#dialog').close()")}`;
 
-modal('Onboarding workflow',body[caseView]||body.overview,foot);$('#dialog').classList.add('onb-dialog')};
+caseModal('Onboarding workflow',body[caseView]||body.overview,foot,true)};
 
 global.onboardingAcceptance=function(id,answer){if(!permitted())return;const r=find(id);if(!r||r.stage!==1)return;
 const previous=structuredClone(state.onboarding);
@@ -571,7 +573,7 @@ global.onboardingAdvance=function(id){if(!permitted())return;const r=find(id);if
 const check=canAdvance(r);
 if(!check.ok)return toast(check.reason);
 const next=stages[r.stage];if(!next)return;
-modal('Advance this case',`<p>Move <strong data-i18n-user>${esc(r.name)}</strong> from <strong>${esc(stageName(r.stage))}</strong> to <strong>${esc(next.name)}</strong>?</p><p class="sub">${esc(next.note)}</p><label class="field full">Note for the history (optional)<input id="onbAdvanceNote" maxlength="160"></label>`,
+caseModal('Advance this case',`<p>Move <strong data-i18n-user>${esc(r.name)}</strong> from <strong>${esc(stageName(r.stage))}</strong> to <strong>${esc(next.name)}</strong>?</p><p class="sub">${esc(next.note)}</p><label class="field full">Note for the history (optional)<input id="onbAdvanceNote" maxlength="160"></label>`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Confirm',`onboardingAdvanceConfirm('${id}')`,'primary'))};
 
 global.onboardingAdvanceConfirm=function(id){if(!permitted())return;const r=find(id);if(!r)return;
@@ -588,7 +590,7 @@ const setItem=(record,itemId,state,note)=>{record.items[itemId]=Object.assign(re
 
 global.onboardingAskJoining=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const p=proposalOf(r);
-modal('Ask the joiner to confirm',`<p>Send <strong data-i18n-user>${esc(r.name)}</strong> the proposed joining date and the relocation question. The joiner can accept the date or suggest other dates.</p>
+caseModal('Ask the joiner to confirm',`<p>Send <strong data-i18n-user>${esc(r.name)}</strong> the proposed joining date and the relocation question. The joiner can accept the date or suggest other dates.</p>
 <label class="field full">Proposed joining date<input id="onbProposeDate" type="date" value="${esc(p.date||r.joiningDate||'')}"></label>
 <p class="sub">Relocation is asked as a question, not assumed. The answer decides whether travel, accommodation and transport appear on this checklist.</p>`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Send to the joiner',`onboardingAskJoiningSave('${id}')`,'primary'))};
@@ -607,7 +609,7 @@ render();onboardingDetail(id);toast('Sent to the joiner. Awaiting the response.'
 
 global.onboardingJoinerReply=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const p=proposalOf(r);
-modal('Record the joiner response',`<p class="sub">Recorded as received from <strong data-i18n-user>${esc(r.name)}</strong>. HR records the answer; the joiner does not change the case directly in this demonstration.</p>
+caseModal('Record the joiner response',`<p class="sub">Recorded as received from <strong data-i18n-user>${esc(r.name)}</strong>. HR records the answer; the joiner does not change the case directly in this demonstration.</p>
 <h3>Relocation</h3>
 <div class="onb-flags">
 <label class="onb-flag"><input type="radio" name="onbReloc" id="onbRelocNeeded" ${r.relocating?'checked':''}><span>Relocation is needed</span></label>
@@ -645,7 +647,7 @@ render();onboardingDetail(id);toast(accepts?'Joining date accepted.':'Suggested 
 
 global.onboardingReviewDates=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const p=proposalOf(r);
-modal('Review the suggested dates',`<p><strong data-i18n-user>${esc(r.name)}</strong> did not accept ${esc(p.date)} and suggested the dates below.</p>
+caseModal('Review the suggested dates',`<p><strong data-i18n-user>${esc(r.name)}</strong> did not accept ${esc(p.date)} and suggested the dates below.</p>
 ${p.note?`<div class="callout" data-i18n-user>Note from the joiner: ${esc(p.note)}</div>`:''}
 <div class="toolbar onb-actions">${p.proposed.map(d=>btn('Accept '+d,`onboardingAcceptDate('${id}','${d}')`,'primary')).join('')}</div>
 <p class="sub">Or propose a different date, which goes back to the joiner for acceptance.</p>
@@ -671,7 +673,7 @@ global.onboardingDraftProfile=function(id){if(!permitted())return;const r=find(i
 if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
 const draft=draftProfile(r);
 const matched=matchTemplate(r);
-modal('Employee profile draft',`<p class="sub">Drafted from onboarding case ${esc(r.id)} by the profile agent. Nothing is created until HR approves this draft. Review the working pattern and entitlement before approving.</p>
+caseModal('Employee profile draft',`<p class="sub">Drafted from onboarding case ${esc(r.id)} by the profile agent. Nothing is created until HR approves this draft. Review the working pattern and entitlement before approving.</p>
 <div class="callout"><strong>${esc(draft.templateName)}</strong> applied${draft.templateChosenByHR?' by HR, in place of the '+esc(matched.name.toLowerCase())+' matched from the designation':' from the designation and role'}. ${esc(templateById(draft.template).covers)}.</div>
 <label class="field full">Working pattern template<select id="onbTemplate">${profileTemplates.map(t=>`<option value="${t.id}" ${t.id===draft.template?'selected':''}>${t.name}${t.id===matched.id?' · matched from the designation':''}</option>`).join('')}</select></label>
 <div class="toolbar onb-actions">${btn('Apply this pattern',`onboardingApplyTemplate('${r.id}')`)}${draft.templateChosenByHR?btn('Use the matched pattern',`onboardingResetTemplate('${r.id}')`):''}</div>
@@ -714,7 +716,7 @@ $('#dialog').close();profileId=r.profile.id;go('People & Service Records');openP
 global.onboardingItem=function(id,itemId){if(!permitted())return;const r=find(id);if(!r)return;
 const item=checklist.find(i=>i.id===itemId);if(!item)return;
 const current=itemState(r,itemId),entry=r.items[itemId]||{};
-modal('Update checklist item',`<h3>${esc(item.name)}</h3><p class="sub">${esc(item.group)} · from stage ${item.stage}${item.hard?' · hard block':''}</p>
+caseModal('Update checklist item',`<h3>${esc(item.name)}</h3><p class="sub">${esc(item.group)} · from stage ${item.stage}${item.hard?' · hard block':''}</p>
 <label class="field full">State<select id="onbItemState">${states.map(s=>`<option ${s===current?'selected':''}>${s}</option>`).join('')}</select></label>
 <label class="field full">Reason or note<input id="onbItemNote" maxlength="160" value="${esc(entry.note||'')}" placeholder="e.g. Marksheet verification in progress with the college"></label>
 <p class="sub">A failed item can be resubmitted and checked again. Waived records a deliberate HR decision that this item does not apply.</p>`,
@@ -734,7 +736,7 @@ render();onboardingDetail(id);toast(item.name+' set to '+next+'.')};
 
 global.onboardingAsk=function(id,itemId){if(!permitted())return;const r=find(id);if(!r)return;
 const item=checklist.find(i=>i.id===itemId);if(!item)return;
-modal('Ask a question',`<h3>${esc(item.name)}</h3><p class="sub">The joiner sees the question in the case, replies, and uploads the correct document. Every question, reply and upload is logged with date and owner.</p>
+caseModal('Ask a question',`<h3>${esc(item.name)}</h3><p class="sub">The joiner sees the question in the case, replies, and uploads the correct document. Every question, reply and upload is logged with date and owner.</p>
 <label class="field full">Question or reply<input id="onbQuestion" maxlength="200" placeholder="e.g. Did you upload the wrong document?"></label>
 <label class="field full">Recorded as<select id="onbQuestionBy"><option value="hr">Question from HR</option><option value="joiner">Reply recorded from the joiner</option></select></label>`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Record',`onboardingAskSave('${id}','${itemId}')`,'primary'))};
@@ -751,7 +753,7 @@ if(!persist('Onboarding question recorded for '+r.name+' on '+item.name,()=>{sta
 render();onboardingDetail(id);toast('Recorded on the case.')};
 
 /* ---------- bulk upload ---------- */
-global.onboardingUpload=function(){if(!permitted())return;preview=[];fileName='';reading++;modal('Upload employee list',`<p>Create one onboarding case per name. Employee information can be completed on each case afterwards.</p><label class="field">Employee list<input id="onboardFile" type="file" accept=".csv,.txt,text/csv,text/plain" onchange="onboardingRead(this.files[0])"></label><p class="sub">Maximum 200 KB and 500 employees. Excel files: save as CSV first.</p><div id="onboardPreview" aria-live="polite"></div>`,btn('Cancel',"$('#dialog').close()")+`<button class="primary" id="onboardStart" onclick="onboardingStart()" disabled>Start onboarding</button>`)};
+global.onboardingUpload=function(){if(!permitted())return;preview=[];fileName='';reading++;caseModal('Upload employee list',`<p>Create one onboarding case per name. Employee information can be completed on each case afterwards.</p><label class="field">Employee list<input id="onboardFile" type="file" accept=".csv,.txt,text/csv,text/plain" onchange="onboardingRead(this.files[0])"></label><p class="sub">Maximum 200 KB and 500 employees. Excel files: save as CSV first.</p><div id="onboardPreview" aria-live="polite"></div>`,btn('Cancel',"$('#dialog').close()")+`<button class="primary" id="onboardStart" onclick="onboardingStart()" disabled>Start onboarding</button>`)};
 
 global.onboardingRead=async function(file){if(!permitted())return;const token=++reading;preview=[];$('#onboardStart').disabled=true;if(!file)return;fileName=file.name;try{if(!/\.(csv|txt)$/i.test(file.name))throw Error('Choose a CSV or TXT file.');if(file.size>200000)throw Error('Use a file smaller than 200 KB.');const content=await file.text();if(token!==reading||!permitted()||!$('#onboardPreview'))return;preview=parse(content,records().map(r=>r.name));const valid=preview.filter(r=>!r.issue);$('#onboardPreview').innerHTML=`<h3>Review ${esc(fileName)}</h3><p>${valid.length} ready · ${preview.length-valid.length} excluded</p><p class="sub">Duplicates and invalid rows will be skipped. Namesakes can be reviewed separately when employee identifiers are added.</p><div class="tablewrap" style="max-height:280px;overflow:auto"><table><thead><tr><th>ROW</th><th>EMPLOYEE NAME</th><th>RESULT</th></tr></thead><tbody>${preview.map(r=>`<tr><td>${r.row}</td><td data-i18n-user>${esc(r.name)}</td><td>${r.issue?esc(r.issue):'Ready'}</td></tr>`).join('')}</tbody></table></div>`;$('#onboardStart').disabled=!valid.length;$('#onboardStart').textContent='Start onboarding ('+valid.length+')'}catch(e){if(token===reading&&$('#onboardPreview'))$('#onboardPreview').textContent=e.message}};
 
