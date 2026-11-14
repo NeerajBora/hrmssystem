@@ -39,11 +39,16 @@ const r=record;r.items=r.items||{};r.history=r.history||[];
 const m=model(),proposal=m.proposalOf(r),tasks=m.joinerTasks(r);
 const stage=m.stages[r.stage-1];
 const outstanding=tasks.filter(i=>['Pending','Failed'].includes(m.itemState(r,i.id))).length;
+/* After submitting, there is nothing for the joiner to do: the page becomes
+   what NRL has told them, until access is released. */
+const waitingOnNRL=!!r.submittedOn;
 const waiting=r.acceptance===null?'Accept or decline your offer.'
 :r.acceptance==='No'?'You declined this offer. Nothing further is needed.'
 :m.joinerAwaitingAnswer(r)?'Confirm your joining date and whether you need relocation support.'
+:r.accessReleasedOn?'Your HRMS access is ready. Sign in below.'
+:r.submittedOn?'Thank you. Everything is with HR, and nothing is waiting on you.'
 :outstanding?'Send the '+outstanding+' document(s) still outstanding below.'
-:m.joinerComplete(r)&&!r.submittedOn?'Everything is ready. Submit your onboarding below.'
+:m.joinerComplete(r)?'Everything is ready. Submit your onboarding below.'
 :'Nothing is waiting on you. We will be in touch as the checks complete.';
 
 return `<main class="joiner">
@@ -61,12 +66,12 @@ return `<main class="joiner">
 <p class="joiner-waiting">${esc(waiting)}</p>
 </section>
 
-${offerCard(r)}
+${waitingOnNRL?'':`${offerCard(r)}
 ${confirmCard(r,proposal)}
 ${documentCard(r,tasks)}
 ${submitCard(r)}
+${progressCard(r)}`}
 ${readyCard(r)}
-${progressCard(r)}
 ${noticeCard(r)}
 
 <p class="joiner-foot">Fictional demonstration data. Uploads are recorded by file name only; no file content is stored or sent anywhere. This page has no sign-in and is not an authentication layer.</p>
@@ -242,7 +247,6 @@ $('#dialog').close();refresh();toast('Reply sent.')};
 function submitCard(r){
 if(r.acceptance!=='Yes')return '';
 const m=model();
-if(r.submittedOn)return `<section class="joiner-card"><h2>Submitted</h2><p class="joiner-note">You sent everything on ${esc(r.submittedOn)}. Finance, logistics and HR record setup have started. Nothing else is needed from you for now.</p></section>`;
 if(!m.joinerComplete(r))return '';
 return `<section class="joiner-card joiner-submit">
 <h2>Send everything to HR</h2>
