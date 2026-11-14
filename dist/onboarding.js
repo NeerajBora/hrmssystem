@@ -341,11 +341,22 @@ lines:[['Basic pay',basic],['Dearness allowance',da],['House rent allowance',hra
 .concat(shiftAllowance?[['Shift allowance',shiftAllowance]]:[])
 .concat(conveyance?[['Conveyance',conveyance]]:[])}}
 
+const stepIcons={
+travel:'<path d="M10.2 3.3 8.7 3l-3 5.1-3.3-.6a1 1 0 0 0-1 1.5l2.4 3.4-1 1.8 1.4.6 1.5-1.4 4 1 .7-1.5-2.7-2.6 3.5-6z" transform="translate(4 4) scale(0.95)"/>',
+accommodation:'<path d="M4 18v-7m0 7h16v-5a3 3 0 0 0-3-3H4m0-4v4"/><circle cx="8" cy="11" r="1.6"/>',
+goods:'<path d="M4 8.5 12 5l8 3.5v7L12 19l-8-3.5z"/><path d="M4 8.5 12 12l8-3.5M12 12v7"/>',
+local:'<path d="M5 16h14M6.5 16V9.8L8 6.5h8l1.5 3.3V16"/><circle cx="8.3" cy="16.6" r="1.4"/><circle cx="15.7" cy="16.6" r="1.4"/>',
+bank:'<path d="M4 9.5 12 5l8 4.5M5.5 10v7M10 10v7M14 10v7M18.5 10v7M4 19.5h16"/>',
+pan:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M7 10h4M7 13.5h7"/>',
+aadhaar:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 15.5c.6-1.3 1.7-2 3-2s2.4.7 3 2M15 10h3M15 13h3"/>'};
+const stepIcon=id=>`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${stepIcons[id]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
+const tickIcon='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+
 /* Finance workflow: identity and bank verification gate the compensation. */
 const financeChecks=[
-{id:'bank',name:'Bank account verification',document:'d_bank',detail:'Account details checked against the document the joiner sent.'},
-{id:'pan',name:'PAN verification',document:'d_tax',detail:'Tax declaration checked for a valid permanent account number.'},
-{id:'aadhaar',name:'Aadhaar verification',document:'d_identity',detail:'Identity proof checked against the name on the case.'}];
+{id:'bank',name:'Bank account verification',document:'d_bank'},
+{id:'pan',name:'PAN verification',document:'d_tax'},
+{id:'aadhaar',name:'Aadhaar verification',document:'d_identity'}];
 const financeCleared=run=>!!run&&(run.output.checks||[]).length>0&&(run.output.checks||[]).every(c=>((run.output.checkStates||{})[c.id]||{}).state==='Verified');
 
 /* Logistics workflow: only has work to do when relocation was asked for. */
@@ -353,10 +364,10 @@ function logistics(record){
 if(!record.relocating)return {needed:false,tasks:[]};
 const to=record.location||'the work location';
 return {needed:true,tasks:[
-{id:'travel',name:'Travel to '+to,detail:'Book travel for the joiner and dependants to reach '+to+' before the joining date.'},
-{id:'accommodation',name:'Transit accommodation',detail:'Hold guest house or transit accommodation from the joining date for up to 30 days.'},
-{id:'goods',name:'Household goods movement',detail:'Arrange packing and movement of household goods against the entitlement for the grade.'},
-{id:'local',name:'Local transport and reporting',detail:'Arrange local transport for the reporting day and share the gate and reporting point.'}]}}
+{id:'travel',name:'Travel to '+to},
+{id:'accommodation',name:'Transit accommodation'},
+{id:'goods',name:'Household goods movement'},
+{id:'local',name:'Local transport and reporting'}]}}
 
 /* Company address, never clashing with one already issued. */
 function companyEmail(record,taken){
@@ -784,14 +795,8 @@ return `<h3>Identity and bank verification</h3>
 ${agent.state==='Running'?'<div class="callout">The verification agent is checking the documents…</div>':''}
 ${agent.state==='Unavailable'?`<div class="callout">The verification agent is not reachable: ${esc(agent.note||'')} Mark a check by hand instead.</div>`:''}
 ${agent.state==='Drafted'?`<div class="callout">Checked by the verification agent using ${esc(agent.model||'the configured model')}, against what HR has recorded for each document. No account number, PAN or Aadhaar number is held in this demonstration or sent anywhere.</div>`:''}
-<ol class="onb-board">${checks.map((c,i)=>{const st=checkState(out,c.id);const ok=st.state==='Verified';
-return `<li class="${ok?'done':st.state==='Failed'?'failed':'open'}">
-<span class="onb-board-mark">${ok?'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':i+1}</span>
-<div class="onb-board-body"><strong>${esc(c.name)}</strong>
-<small>${esc(st.note||c.detail)}</small>
-<em>Document on the case: ${esc(itemState(r,c.document))}${st.by?' · '+esc(st.state)+' · '+esc(st.by)+' · '+esc(st.date||''):''}</em></div>
-<div class="onb-board-action">${run.state==='Released'?chip(st.state,tone2(st.state)):btn(ok?'Reopen':'Mark verified',`onboardingFinanceCheck('${r.id}','${c.id}')`,'link')}</div>
-</li>`}).join('')}</ol>
+<ol class="onb-board">${checks.map(c=>{const st=checkState(out,c.id);
+return boardRow(c,Object.assign({},st,{note:st.note||'Document on the case: '+itemState(r,c.document)}),run.state==='Released'?chip(st.state,stepTone(st.state)):btn(st.state==='Verified'?'Reopen':'Mark verified',`onboardingFinanceCheck('${r.id}','${c.id}')`,'link'))}).join('')}</ol>
 ${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the verification agent again':'Run the verification agent',`onboardingFinanceAgent('${r.id}')`,cleared?'':'primary')}</div>`}
 <h3>Compensation</h3>
 ${cleared?`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`
@@ -800,6 +805,15 @@ ${cleared?`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGro
 /* Relocation as a board: every task, what the agent arranged, what is still
    waiting. Booked here means recorded as arranged, never a real booking. */
 const taskState=(out,id)=>((out.states||{})[id]||{state:'Pending',note:''});
+const stepTone=st=>st==='Verified'||st==='Booked'?'ok':st==='Failed'?'bad':'warn';
+function boardRow(step,st,action){
+const done=st.state==='Booked'||st.state==='Verified';
+return `<li class="${done?'done':st.state==='Failed'?'failed':'open'}">
+<span class="onb-step-icon">${done?tickIcon:stepIcon(step.id)}</span>
+<div class="onb-step-body"><strong>${esc(step.name)}</strong>
+${st.note?`<small>${esc(st.note)}</small>`:''}
+${st.by?`<em>${esc(st.state)} · ${esc(st.by)} · ${esc(st.date||'')}</em>`:''}</div>
+<div class="onb-step-action">${action}</div></li>`}
 function relocationBoard(r,out,run){
 const agent=r.logisticsAgent||{state:'Not run'};
 const done=out.tasks.filter(t=>taskState(out,t.id).state==='Booked').length;
@@ -807,14 +821,8 @@ return `<div class="onb-head"><span class="badge ${done===out.tasks.length?'ok':
 ${agent.state==='Running'?'<div class="callout">The relocation agent is working through the list…</div>':''}
 ${agent.state==='Unavailable'?`<div class="callout">The relocation agent is not reachable: ${esc(agent.note||'')} Mark a task arranged by hand instead.</div>`:''}
 ${agent.state==='Drafted'?`<div class="callout">Planned by the relocation agent using ${esc(agent.model||'the configured model')}. Nothing is booked with a carrier, a guest house or a vendor: this records what the desk would arrange.</div>`:''}
-<ol class="onb-board">${out.tasks.map((t,i)=>{const st=taskState(out,t.id);const booked=st.state==='Booked';
-return `<li class="${booked?'done':'open'}">
-<span class="onb-board-mark">${booked?'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':i+1}</span>
-<div class="onb-board-body"><strong>${esc(t.name)}</strong>
-<small>${esc(st.note||t.detail)}</small>
-${st.by?`<em>${esc(st.state)} · ${esc(st.by)} · ${esc(st.date||'')}</em>`:''}</div>
-<div class="onb-board-action">${run.state==='Released'?chip(st.state,booked?'ok':'warn'):btn(booked?'Reopen':'Mark arranged',`onboardingRelocationTask('${r.id}','${t.id}')`,'link')}</div>
-</li>`}).join('')}</ol>
+<ol class="onb-board">${out.tasks.map(t=>{const st=taskState(out,t.id);
+return boardRow(t,st,run.state==='Released'?chip(st.state,stepTone(st.state)):btn(st.state==='Booked'?'Reopen':'Mark arranged',`onboardingRelocationTask('${r.id}','${t.id}')`,'link'))}).join('')}</ol>
 ${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the relocation agent again':'Run the relocation agent',`onboardingRelocationAgent('${r.id}')`,'primary')}</div>`}`}
 
 global.onboardingFinanceCheck=function(id,checkId){if(!permitted())return;const r=find(id);if(!r)return;
