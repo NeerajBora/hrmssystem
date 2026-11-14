@@ -792,7 +792,7 @@ ${r.needsInfo?`<div class="callout">Employee information is incomplete for this 
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
 <div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
-<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}</div>
+<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}${r.acceptance==='Yes'&&r.stage>=3&&!r.submittedOn&&joinerTasks(r).some(i=>!['Submitted','Verified','Waived'].includes(itemState(r,i.id)))?btn('Fill joiner documents (demo)',`onboardingFillDocs('${r.id}')`):''}</div>
 ${confirmPanel(r)}
 ${workflowPanel(r)}
 ${profilePanel(r)}`,
@@ -805,6 +805,23 @@ const foot=caseView==='overview'
 :`<div class="onb-footleft"><button class="onb-back" onclick="onboardingDetail('${r.id}','overview')">${icon.back}Back</button></div>${btn('Close',"$('#dialog').close()")}`;
 
 caseModal('Onboarding workflow',body[caseView]||body.overview,foot,true)};
+
+/* A demonstration shortcut: fills what the joiner would have sent, so a
+   checklist can be shown without uploading fifteen files. It stops at
+   Submitted, leaves anything HR already cleared alone, and does not submit
+   the case: the joiner still presses Submit in the portal. */
+global.onboardingFillDocs=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+if(r.acceptance!=='Yes'||r.submittedOn)return toast('Nothing to fill on this case.');
+const pending=joinerTasks(r).filter(i=>!['Submitted','Verified','Waived'].includes(itemState(r,i.id)));
+if(!pending.length)return toast('The joiner documents are already in.');
+const previous=structuredClone(state.onboarding);
+for(const item of pending)r.items[item.id]=Object.assign(r.items[item.id]||{},{
+state:'Submitted',
+note:item.kind==='signature'?'Signed by the joiner as '+r.name+' (demonstration fill)':'Uploaded '+item.id.replace(/^[a-z]_/,'').replace(/_/g,'-')+'.pdf (demonstration fill)',
+by:r.name,date:now()});
+log(r,pending.length+' joiner document(s) filled for the demonstration. The joiner has not submitted the case.');
+if(!persist('Joiner documents filled for the demonstration: '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDetail(id);toast(pending.length+' document(s) marked Submitted. The joiner still has to submit.')};
 
 /* The joiner's own link into this case. */
 global.onboardingPortal=function(id){if(!permitted())return;const r=find(id);if(!r)return;

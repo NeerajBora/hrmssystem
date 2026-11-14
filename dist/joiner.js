@@ -43,6 +43,7 @@ const waiting=r.acceptance===null?'Accept or decline your offer.'
 :r.acceptance==='No'?'You declined this offer. Nothing further is needed.'
 :m.joinerAwaitingAnswer(r)?'Confirm your joining date and whether you need relocation support.'
 :outstanding?'Send the '+outstanding+' document(s) still outstanding below.'
+:m.joinerComplete(r)&&!r.submittedOn?'Everything is ready. Submit your onboarding below.'
 :'Nothing is waiting on you. We will be in touch as the checks complete.';
 
 return `<main class="joiner">
