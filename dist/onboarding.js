@@ -758,11 +758,72 @@ ${profilePairs([['Submitted by the joiner',r.submittedOn||'Not submitted'],['Emp
 ${workflowsSettled(r)&&!r.accessReleasedOn?`<div class="toolbar onb-actions">${btn('Release HRMS access',`onboardingRelease('${r.id}')`,'primary')}</div>`:''}
 ${r.accessReleasedOn?`<p class="onb-released">HRMS access released on ${esc(r.accessReleasedOn)}. The joiner can sign in with ${esc(r.employeeId)}.</p>`:''}`}
 
+/* Relocation as a board: every task, what the agent arranged, what is still
+   waiting. Booked here means recorded as arranged, never a real booking. */
+const taskState=(out,id)=>((out.states||{})[id]||{state:'Pending',note:''});
+function relocationBoard(r,out,run){
+const agent=r.logisticsAgent||{state:'Not run'};
+const done=out.tasks.filter(t=>taskState(out,t.id).state==='Booked').length;
+return `<div class="onb-head"><span class="badge ${done===out.tasks.length?'ok':'warn'}">${done} of ${out.tasks.length} arranged</span><span class="onb-progress"><i style="width:${Math.round(done/out.tasks.length*100)}%"></i></span></div>
+${agent.state==='Running'?'<div class="callout">The relocation agent is working through the list…</div>':''}
+${agent.state==='Unavailable'?`<div class="callout">The relocation agent is not reachable: ${esc(agent.note||'')} Mark a task arranged by hand instead.</div>`:''}
+${agent.state==='Drafted'?`<div class="callout">Planned by the relocation agent using ${esc(agent.model||'the configured model')}. Nothing is booked with a carrier, a guest house or a vendor: this records what the desk would arrange.</div>`:''}
+<ol class="onb-board">${out.tasks.map((t,i)=>{const st=taskState(out,t.id);const booked=st.state==='Booked';
+return `<li class="${booked?'done':'open'}">
+<span class="onb-board-mark">${booked?'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>':i+1}</span>
+<div class="onb-board-body"><strong>${esc(t.name)}</strong>
+<small>${esc(st.note||t.detail)}</small>
+${st.by?`<em>${esc(st.state)} · ${esc(st.by)} · ${esc(st.date||'')}</em>`:''}</div>
+<div class="onb-board-action">${run.state==='Released'?chip(st.state,booked?'ok':'warn'):btn(booked?'Reopen':'Mark arranged',`onboardingRelocationTask('${r.id}','${t.id}')`,'link')}</div>
+</li>`}).join('')}</ol>
+${run.state==='Released'?'':`<div class="toolbar onb-actions">${btn(agent.state==='Drafted'?'Run the relocation agent again':'Run the relocation agent',`onboardingRelocationAgent('${r.id}')`,'primary')}</div>`}`}
+
+global.onboardingRelocationTask=function(id,taskId){if(!permitted())return;const r=find(id);if(!r)return;
+const run=r.workflows&&r.workflows.logistics;if(!run||run.state==='Released')return;
+const previous=structuredClone(state.onboarding);
+const out=run.output;out.states=out.states||{};
+const current=out.states[taskId]||{state:'Pending'};
+const next=current.state==='Booked'?'Pending':'Booked';
+const task=out.tasks.find(t=>t.id===taskId);
+out.states[taskId]={state:next,note:current.note||'',by:person().name,date:now()};
+log(r,task.name+' marked '+next.toLowerCase()+' by HR');
+if(!persist('Relocation task '+next.toLowerCase()+' for '+r.name+': '+task.name,()=>{state.onboarding=previous}))return;
+render();onboardingWorkflow(id,'logistics')};
+
+global.onboardingRelocationAgent=async function(id){
+const r=find(id);if(!r||!permitted())return;
+const run=r.workflows&&r.workflows.logistics;
+if(!run||run.state==='Released'||!run.output.needed)return;
+if(r.logisticsAgent&&r.logisticsAgent.state==='Running')return;
+r.logisticsAgent={state:'Running',ranOn:now()};
+render();onboardingWorkflow(id,'logistics');
+let outcome;
+try{
+const response=await fetch('/api/logistics',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({case:{designation:r.designation,dept:r.dept,grade:r.grade,employmentType:r.employmentType,location:r.location,category:categoryOf(r),relocating:true},
+joiningDate:r.joiningDate||'',tasks:run.output.tasks.map(t=>({id:t.id,name:t.name}))})});
+const data=await response.json().catch(()=>({}));
+outcome=response.ok?{state:'Drafted',arrangements:data.arrangements,model:data.model,ranOn:now()}
+:{state:'Unavailable',note:data.error||'The relocation agent could not be reached.',ranOn:now()};
+}catch(e){outcome={state:'Unavailable',note:'The relocation agent is not available on this preview.',ranOn:now()}}
+const current=find(id);if(!current)return;
+const live=current.workflows&&current.workflows.logistics;
+current.logisticsAgent={state:outcome.state,note:outcome.note,model:outcome.model,ranOn:outcome.ranOn};
+if(outcome.state==='Drafted'&&live){
+live.output.states=live.output.states||{};
+for(const a of outcome.arrangements)live.output.states[a.id]={state:a.status,note:a.note,by:'Relocation agent',date:now()};
+const booked=outcome.arrangements.filter(a=>a.status==='Booked').length;
+log(current,'Relocation agent worked through '+outcome.arrangements.length+' task(s): '+booked+' arranged, '+(outcome.arrangements.length-booked)+' still waiting')}
+else log(current,'Relocation agent unavailable · '+(outcome.note||''));
+try{save()}catch{}
+render();onboardingWorkflow(id,'logistics');
+toast(outcome.state==='Drafted'?'Relocation agent finished.':outcome.note)};
+
 global.onboardingWorkflow=function(id,runId){if(!permitted())return;const r=find(id);if(!r||!r.workflows||!r.workflows[runId])return;
 const run=r.workflows[runId],out=run.output;
 let body='';
 if(runId==='finance')body=`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`;
-else if(runId==='logistics')body=out.needed?`<ul class="onb-runs">${out.tasks.map(t=>`<li><span><strong>${esc(t.name)}</strong><small>${esc(t.detail)}</small></span></li>`).join('')}</ul><div class="callout">Nothing is booked by the demonstration. Releasing records that the relocation plan is handed to administration.</div>`:'<div class="callout">The joiner answered that relocation is not needed, so this workflow has nothing to do.</div>';
+else if(runId==='logistics')body=out.needed?relocationBoard(r,out,run):'<div class="callout">The joiner answered that relocation is not needed, so this workflow has nothing to do.</div>';
 else body=`${profilePairs([['Employee ID',r.employeeId],['Work email',r.companyEmail],['Template',out.templateName],['Working pattern',out.shift],['Work hours',out.workHours],['Weekly off',out.weeklyOff],['Probation ends',out.probationEnd||'Not applicable'],['Leave entitlement',out.leaveEntitlement],['Access',out.access.join(', ')]])}<div class="callout">Releasing creates the employee profile in People &amp; Service Records.</div>`;
 modal(workflowNames[runId],body,btn('Close',`onboardingDetail('${id}')`)+(run.state==='Drafted'?btn('Release',`onboardingReleaseRun('${id}','${runId}')`,'primary'):''))};
 

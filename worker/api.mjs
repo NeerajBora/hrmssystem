@@ -86,3 +86,62 @@ const clean=sanitiseProfile(JSON.parse(out));
 if(!clean)return json({error:'The draft did not fit the HRMS fields. Please retry.'},422);
 return json(Object.assign(clean,{model:env.GEMINI_MODEL||'gemini-3.1-flash-lite'}))
 }catch{return json({error:'Unable to reach the AI service. Please retry.'},502)}}
+
+/* ---------------------------------------------------------------------------
+   Relocation planning. The model writes what was arranged for each task in a
+   fixed list; it cannot add a task, change the list, or touch anything else.
+--------------------------------------------------------------------------- */
+const arrangementSchema={type:'object',additionalProperties:false,properties:{
+arrangements:{type:'array',items:{type:'object',additionalProperties:false,properties:{
+id:{type:'string'},status:{type:'string',enum:['Booked','Pending']},note:{type:'string'}},
+required:['id','status','note']}}},required:['arrangements']};
+
+export function sanitiseArrangements(draft,allowed){
+if(!draft||!Array.isArray(draft.arrangements))return null;
+const ids=new Set(allowed||[]);
+const seen=new Set();
+const out=[];
+for(const item of draft.arrangements){
+const id=text(item&&item.id,40);
+if(!ids.has(id)||seen.has(id))continue;
+const note=text(item&&item.note,140);
+if(!note)continue;
+seen.add(id);
+out.push({id,status:item.status==='Booked'?'Booked':'Pending',note})}
+return out.length?out:null}
+
+export async function logistics(request,env){
+const json=(v,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store'}});
+if(request.method!=='POST')return json({error:'Method not allowed'},405);
+if(!request.headers.get('oai-authenticated-user-id'))return json({error:'Sign in to use the assistant.'},401);
+if(request.headers.get('origin')!==new URL(request.url).origin)return json({error:'Invalid origin'},403);
+if(!env.GEMINI_API_KEY)return json({error:'AI connection is not configured.'},503);
+try{
+const raw=await request.text();
+if(raw.length>8000)return json({error:'Request too large'},413);
+const body=JSON.parse(raw);
+const brief=roleBrief(body);
+const tasks=(Array.isArray(body.tasks)?body.tasks:[]).map(t=>({id:text(t&&t.id,40),name:text(t&&t.name,80)})).filter(t=>t.id&&t.name).slice(0,8);
+if(!tasks.length)return json({error:'No tasks to arrange'},400);
+const joiningDate=text(body.joiningDate,12);
+const instructions=`You are the relocation desk at an Indian public-sector oil refinery, working through a fixed list of tasks for one joiner. Reply only with the schema.
+Return one arrangement for every task id you are given, and no others. Never invent a task.
+status is Booked when the arrangement can be settled now, Pending when it waits on something else such as the joiner confirming dates or a vendor quote.
+note is one short line saying what was arranged, in plain words: the route and approximate dates for travel, the kind of accommodation and how long it is held, the entitlement used for household goods, the pick-up and reporting point for local transport. Keep it under about twenty words.
+Use the work location and joining date you are given. Do not state a price, a booking reference, a flight number, a vendor name or a person's name: nothing here is a real booking.`;
+const ask=()=>providerFetch(env,'https://api.openai.com/v1/responses',{method:'POST',
+headers:{Authorization:'Bearer '+env.OPENAI_API_KEY,'Content-Type':'application/json'},
+body:JSON.stringify({model:'gpt-4.1-mini',store:false,instructions,
+input:[{role:'user',content:JSON.stringify({role:brief,joiningDate,tasks})}],max_output_tokens:2200,
+text:{format:{type:'json_schema',name:'arrangements',strict:true,schema:arrangementSchema}}}),
+signal:AbortSignal.timeout(55000)},arrangementSchema);
+let response=await ask();
+if(!response.ok){await new Promise(r=>setTimeout(r,700));response=await ask()}
+if(!response.ok)return json({error:response.status===429?'The relocation agent is rate limited. Please retry.':'The relocation agent could not respond. Please retry.'},502);
+const data=await response.json();
+const out=(data.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
+if(!out)return json({error:'No plan returned. Please retry.'},502);
+const clean=sanitiseArrangements(JSON.parse(out),tasks.map(t=>t.id));
+if(!clean)return json({error:'The plan did not fit the tasks. Please retry.'},422);
+return json({arrangements:clean,model:env.GEMINI_MODEL||'gemini-3.1-flash-lite'})
+}catch(e){console.error('logistics',e&&e.stack||e);return json({error:'Unable to reach the relocation agent. Please retry.'},502)}}

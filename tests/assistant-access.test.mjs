@@ -35,3 +35,21 @@ assert.equal(clean.workHours.includes('<'),false);
 assert.equal(clean.access[0].includes('<'),false);
 assert.equal(clean.training[0].name.includes('<'),false);
 assert.equal(clean.weeklyOff,'SatSun')});
+
+import {sanitiseArrangements} from '../worker/api.mjs';
+test('a relocation plan may only answer the tasks it was given',()=>{
+const allowed=['travel','accommodation','goods','local'];
+const clean=sanitiseArrangements({arrangements:[
+{id:'travel',status:'Booked',note:'Train to Numaligarh arriving 11 April'},
+{id:'invented',status:'Booked',note:'Chartered aircraft'},
+{id:'travel',status:'Pending',note:'A second answer for the same task'},
+{id:'goods',status:'Nonsense',note:'Entitlement confirmed'},
+{id:'local',status:'Booked',note:''}]},allowed);
+assert.deepEqual(clean.map(a=>a.id),['travel','goods'],'invented, repeated and empty entries are dropped');
+assert.equal(clean[0].status,'Booked');
+assert.equal(clean[1].status,'Pending','an unknown status falls back to Pending');
+assert.equal(sanitiseArrangements({arrangements:[{id:'invented',status:'Booked',note:'x'}]},allowed),null);
+assert.equal(sanitiseArrangements(null,allowed),null);
+const trimmed=sanitiseArrangements({arrangements:[{id:'travel',status:'Booked',note:'<b>'+'x'.repeat(400)+'</b>'}]},allowed);
+assert.equal(trimmed[0].note.length,140);
+assert.equal(trimmed[0].note.includes('<'),false)});
