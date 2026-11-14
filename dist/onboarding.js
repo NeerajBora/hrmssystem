@@ -733,23 +733,17 @@ return `<details class="onb-group" ${openHere&&items[0].stage<=r.stage?'open':''
 <div class="tablewrap"><table><thead><tr><th>ITEM</th><th>STAGE</th><th>STATE</th><th>NOTES, QUESTIONS AND REPLIES</th><th></th></tr></thead><tbody>
 ${items.map(i=>{const st=itemState(r,i.id),entry=r.items[i.id]||{};return `<tr><td>${esc(i.name)}${i.hard?' <em class="onb-hard">hard block</em>':''}${i.optional?' <em class="onb-soft">if applicable</em>':''}</td><td>${i.stage}</td><td>${chip(st,tone(st))}</td><td>${entry.note?`<small data-i18n-user>${esc(entry.note)}</small>`:''}${(entry.thread||[]).map(t=>`<div class="onb-thread"><small data-i18n-user>${esc(t.date)} · ${esc(t.by)}: ${esc(t.text)}</small></div>`).join('')}</td><td class="onb-rowactions">${btn('Update',`onboardingItem('${r.id}','${i.id}')`,'link')}${btn('Ask',`onboardingAsk('${r.id}','${i.id}')`,'link')}</td></tr>`}).join('')}
 </tbody></table></div></details>`}).join('');
-const stageAction=r.stage===1&&r.acceptance!=='Yes'?`${btn('Record acceptance: Yes',`onboardingAcceptance('${r.id}','Yes')`,'primary')}${btn('Record acceptance: No',`onboardingAcceptance('${r.id}','No')`)}`:'';
+const stageAction='';
 
-/* Joining date and relocation, as settled with the joiner. */
-function confirmActions(r){
-if(r.stage!==3||r.acceptance==='No')return '';
-const p=proposalOf(r);
-return p.state==='Not asked'?btn('Ask the joiner to confirm',`onboardingAskJoining('${r.id}')`)
-:p.state==='Awaiting joiner'?btn('Record the joiner response',`onboardingJoinerReply('${r.id}')`,'primary')+btn('Change the proposed date',`onboardingAskJoining('${r.id}')`)
-:p.state==='Alternative proposed'?btn('Review the suggested dates',`onboardingReviewDates('${r.id}')`,'primary')
-:btn('Reopen the joining confirmation',`onboardingAskJoining('${r.id}')`)}
+/* Joining date and relocation, as settled by the joiner in their portal. */
+const confirmActions=()=>'';
 
 function confirmPanel(r){
 if(r.stage<3||r.acceptance==='No')return '';
 const p=proposalOf(r);
 if(p.state==='Not asked')return '';
-const rows=[['Joining date',p.date||'Not set'],['Relocation',p.relocation||'Not answered'],['Confirmation',p.state]];
-if(p.proposed.length)rows.push(['Suggested by the joiner',p.proposed.join(' · ')]);
+const rows=[['Joining date',p.date||'Not chosen yet'],['Relocation',p.relocation||'Not answered yet'],
+['Chosen by',p.state==='Accepted'?'The joiner, in the portal':'Waiting for the joiner']];
 if(p.note)rows.push(['Joiner note',p.note]);
 return `<h3>Joining confirmation</h3>${profilePairs(rows)}`}
 
@@ -813,6 +807,7 @@ overview:`
 <h3 class="onb-name" data-i18n-user>${esc(r.name)}</h3>
 <div class="onb-head">${chip(s.status,tone(s.status))}<span class="onb-progress"><i style="width:${s.percent}%"></i></span><small>${s.done} of ${s.total} checklist items cleared</small></div>
 ${r.needsInfo?`<div class="callout">Employee information is incomplete for this case. ${btn('Add employee information',`onboardingNew('${r.id}')`,'link')}</div>`:''}
+${r.acceptance===null?`<div class="callout">Waiting for the candidate to accept the offer and the terms in their joining portal. The joining date and relocation follow there, in the same place.</div>`:''}
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
 <div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
@@ -893,14 +888,6 @@ global.onboardingPortal=function(id){if(!permitted())return;const r=find(id);if(
 if(!r.portalToken){try{save()}catch{}}
 $('#dialog').close();location.hash='#/joining/'+r.portalToken};
 
-global.onboardingAcceptance=function(id,answer){if(!permitted())return;const r=find(id);if(!r||r.stage!==1)return;
-const previous=structuredClone(state.onboarding);
-r.acceptance=answer;
-if(answer==='Yes'){r.stage=2;log(r,'Offer accepted. Joining date confirmed. Portal link for documents sent to the joiner.')}
-else log(r,'Offer declined by the joiner. Case stopped; onboarding does not start.');
-if(!persist('Offer acceptance recorded for '+r.name+': '+answer,()=>{state.onboarding=previous}))return;
-render();onboardingDetail(id);toast(answer==='Yes'?'Acceptance recorded. Document filling can start.':'Decline recorded. The case is stopped.')};
-
 global.onboardingAdvance=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const check=canAdvance(r);
 if(!check.ok)return toast(check.reason);
@@ -921,87 +908,6 @@ if(reachedReady&&!r.patternAgent)onboardingAgentDraft(id)};
 
 /* ---------- joining confirmation ---------- */
 const setItem=(record,itemId,state,note)=>{record.items[itemId]=Object.assign(record.items[itemId]||{},{state,note:note||'',by:person().name,date:now()})};
-
-global.onboardingAskJoining=function(id){if(!permitted())return;const r=find(id);if(!r)return;
-const p=proposalOf(r);
-caseModal('Ask the joiner to confirm',`<p>Send <strong data-i18n-user>${esc(r.name)}</strong> the proposed joining date and the relocation question. The joiner can accept the date or suggest other dates.</p>
-<label class="field full">Proposed joining date<input id="onbProposeDate" type="date" value="${esc(p.date||r.joiningDate||'')}"></label>
-<p class="sub">Relocation is asked as a question, not assumed. The answer decides whether travel, accommodation and transport appear on this checklist.</p>`,
-btn('Cancel',`onboardingDetail('${id}')`)+btn('Send to the joiner',`onboardingAskJoiningSave('${id}')`,'primary'))};
-
-global.onboardingAskJoiningSave=function(id){if(!permitted())return;const r=find(id);if(!r)return;
-const date=val('onbProposeDate');
-if(!date)return toast('Enter the proposed joining date.');
-if(r.offerDate&&date<r.offerDate)return toast('The joining date cannot be before the offer date.');
-const previous=structuredClone(state.onboarding);
-askJoiner(r,date);
-setItem(r,'k_relocation','Submitted','Relocation question sent to the joiner');
-setItem(r,'k_joindate','Submitted','Joining date '+date+' proposed to the joiner');
-log(r,'Joining date '+date+' and the relocation question sent to the joiner');
-if(!persist('Joining confirmation requested for '+r.name,()=>{state.onboarding=previous}))return;
-render();onboardingDetail(id);toast('Sent to the joiner. Awaiting the response.')};
-
-global.onboardingJoinerReply=function(id){if(!permitted())return;const r=find(id);if(!r)return;
-const p=proposalOf(r);
-caseModal('Record the joiner response',`<p class="sub">Recorded as received from <strong data-i18n-user>${esc(r.name)}</strong>. HR records the answer; the joiner does not change the case directly in this demonstration.</p>
-<h3>Relocation</h3>
-<div class="onb-flags">
-<label class="onb-flag"><input type="radio" name="onbReloc" id="onbRelocNeeded" ${r.relocating?'checked':''}><span>Relocation is needed</span></label>
-<label class="onb-flag"><input type="radio" name="onbReloc" id="onbRelocNot" ${r.relocating?'':'checked'}><span>Relocation is not needed</span></label>
-</div>
-<h3>Joining date</h3>
-<div class="onb-flags">
-<label class="onb-flag"><input type="radio" name="onbDateAnswer" id="onbDateAccept" checked onchange="onboardingToggleDates()"><span>Accepts ${esc(p.date||r.joiningDate||'the proposed date')}</span></label>
-<label class="onb-flag"><input type="radio" name="onbDateAnswer" id="onbDatePropose" onchange="onboardingToggleDates()"><span>Suggests other dates for HR to review</span></label>
-</div>
-<div id="onbDateOptions" hidden><div class="formgrid">
-<label class="field">First preference<input id="onbAlt1" type="date"></label>
-<label class="field">Second preference<input id="onbAlt2" type="date"></label>
-</div></div>
-<label class="field full">Note from the joiner (optional)<input id="onbJoinerNote" maxlength="160" placeholder="e.g. Notice period ends on 10 December"></label>`,
-btn('Cancel',`onboardingDetail('${id}')`)+btn('Record response',`onboardingJoinerReplySave('${id}')`,'primary'))};
-
-global.onboardingToggleDates=function(){const box=$('#onbDateOptions');if(box)box.hidden=!$('#onbDatePropose')?.checked};
-
-global.onboardingJoinerReplySave=function(id){if(!permitted())return;const r=find(id);if(!r)return;
-const accepts=!!$('#onbDateAccept')?.checked;
-const proposed=[val('onbAlt1'),val('onbAlt2')].filter(Boolean);
-if(!accepts&&!proposed.length)return toast('Enter at least one date suggested by the joiner.');
-if(!accepts&&r.offerDate&&proposed.some(d=>d<r.offerDate))return toast('A suggested date cannot be before the offer date.');
-const previous=structuredClone(state.onboarding);
-const relocation=$('#onbRelocNeeded')?.checked?'Needed':'Not needed';
-const note=val('onbJoinerNote');
-const p=joinerResponse(r,{relocation,accepts,proposed,note});
-setItem(r,'k_relocation','Verified','Joiner answered: relocation '+relocation.toLowerCase());
-if(accepts){setItem(r,'k_joindate','Verified','Joining date '+p.date+' accepted by the joiner');log(r,'Joiner accepted the joining date '+p.date+'. Relocation '+relocation.toLowerCase()+'.')}
-else{setItem(r,'k_joindate','Submitted','Joiner suggested '+proposed.join(' or ')+'. Awaiting HR review.');log(r,'Joiner suggested '+proposed.join(' or ')+' instead of '+p.date+'. Awaiting HR review.')}
-if(note)log(r,'Note from the joiner: '+note);
-if(!persist('Joiner response recorded for '+r.name,()=>{state.onboarding=previous}))return;
-render();onboardingDetail(id);toast(accepts?'Joining date accepted.':'Suggested dates recorded for HR review.')};
-
-global.onboardingReviewDates=function(id){if(!permitted())return;const r=find(id);if(!r)return;
-const p=proposalOf(r);
-caseModal('Review the suggested dates',`<p><strong data-i18n-user>${esc(r.name)}</strong> did not accept ${esc(p.date)} and suggested the dates below.</p>
-${p.note?`<div class="callout" data-i18n-user>Note from the joiner: ${esc(p.note)}</div>`:''}
-<div class="toolbar onb-actions">${p.proposed.map(d=>btn('Accept '+d,`onboardingAcceptDate('${id}','${d}')`,'primary')).join('')}</div>
-<p class="sub">Or propose a different date, which goes back to the joiner for acceptance.</p>
-<label class="field full">Different date<input id="onbProposeDate" type="date" value="${esc(p.proposed[0]||'')}"></label>`,
-btn('Cancel',`onboardingDetail('${id}')`)+btn('Propose this date instead',`onboardingAskJoiningSave('${id}')`))};
-
-global.onboardingAcceptDate=function(id,date){if(!permitted())return;const r=find(id);if(!r)return;
-const previous=structuredClone(state.onboarding);
-acceptProposedDate(r,date);
-setItem(r,'k_joindate','Verified','Joining date '+date+' agreed after HR review');
-log(r,'HR accepted the joining date '+date+' suggested by the joiner');
-if(!persist('Joining date agreed for '+r.name+': '+date,()=>{state.onboarding=previous}))return;
-render();onboardingDetail(id);toast('Joining date set to '+date+'.')};
-
-/* ---------- employee identifier and profile ---------- */
-function issueEmployeeId(record){
-if(record.employeeId)return record.employeeId;
-const taken=people.map(p=>p.id).concat(records().map(r=>r.employeeId).filter(Boolean));
-record.employeeId=nextEmployeeId(record,taken);
-return record.employeeId}
 
 global.onboardingDraftProfile=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');

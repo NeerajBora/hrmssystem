@@ -92,8 +92,13 @@ global.joinerTermsToggle=function(){const box=$('#joinerAcceptBtn');if(box)box.d
 global.joinerAccept=function(token){const r=caseByToken(token);if(!r||r.acceptance!==null)return;
 if(!$('#joinerTerms')?.checked)return toast('Accept the terms first.');
 const previous=structuredClone(state.onboarding);
-r.acceptance='Yes';r.stage=Math.max(r.stage,2);r.termsAcceptedOn=stamp();
+r.acceptance='Yes';r.termsAcceptedOn=stamp();
+/* Accepting opens pre-joining: the joining date, relocation and the document
+   checklist all arrive together, in the portal. */
+r.stage=Math.max(r.stage,3);
 log(r,'Terms and conditions accepted, offer accepted in the joining portal');
+model().askJoiner(r,r.joiningDate||'');
+log(r,'Pre-joining opened: joining date, relocation and documents are with the joiner');
 sendNotice(r,'documents');
 if(!persist(r,'Offer accepted by '+r.name,()=>{state.onboarding=previous}))return;
 refresh();toast('Offer accepted. Your documents are next.')};
@@ -113,47 +118,37 @@ $('#dialog').close();refresh();toast('Your decline has been recorded.')};
 function confirmCard(r,p){
 if(r.acceptance!=='Yes'||p.state==='Not asked')return '';
 if(p.state!=='Awaiting joiner')return `<section class="joiner-card"><h2>Your joining date</h2>${pairs([['Joining date',p.date],['Relocation',p.relocation],['Status',p.state==='Accepted'?'Agreed':p.state]])}${p.state==='Alternative proposed'?'<p class="joiner-note">Your suggested dates are with HR. We will confirm shortly.</p>':''}</section>`;
-return `<section class="joiner-card">
-<h2>Confirm your joining date</h2>
-<p class="joiner-note">We have proposed <strong>${esc(p.date||'a date')}</strong>. Accept it, or suggest dates that suit you better.</p>
+return `<section class="joiner-card joiner-choose">
+<h2>Choose your joining date</h2>
+<p class="joiner-note">Pick the date you will join and tell us whether you need relocation support. Your answer sets the date on your file; HR is told either way.</p>
+<div class="formgrid">
+<label class="field">Joining date<input id="joinerChosenDate" type="date" value="${esc(p.date||r.joiningDate||'')}" min="${esc(r.offerDate||'')}"></label>
+</div>
 <h3>Do you need relocation support?</h3>
 <div class="joiner-choices">
 <label><input type="radio" name="joinerReloc" id="joinerRelocYes"><span>Yes, I need relocation support</span></label>
 <label><input type="radio" name="joinerReloc" id="joinerRelocNo" checked><span>No, I do not</span></label>
 </div>
-<h3>Joining date</h3>
-<div class="joiner-choices">
-<label><input type="radio" name="joinerDate" id="joinerDateAccept" checked onchange="joinerToggleDates()"><span>I accept ${esc(p.date||'the proposed date')}</span></label>
-<label><input type="radio" name="joinerDate" id="joinerDateOther" onchange="joinerToggleDates()"><span>I would like to suggest other dates</span></label>
-</div>
-<div id="joinerDateOptions" hidden><div class="formgrid">
-<label class="field">First preference<input id="joinerAlt1" type="date"></label>
-<label class="field">Second preference<input id="joinerAlt2" type="date"></label>
-</div></div>
 <label class="field full">Anything we should know?<input id="joinerDateNote" maxlength="160" placeholder="e.g. my notice period ends on 15 January"></label>
-<div class="joiner-actions"><button class="primary" onclick="joinerSendAnswer('${r.portalToken}')">Send to HR</button></div>
+<div class="joiner-actions"><button class="primary" onclick="joinerSendAnswer('${r.portalToken}')">Confirm my joining</button></div>
 </section>`}
-
-global.joinerToggleDates=function(){const box=$('#joinerDateOptions');if(box)box.hidden=!$('#joinerDateOther')?.checked};
 
 global.joinerSendAnswer=function(token){const r=caseByToken(token);if(!r)return;
 const m=model();
 if(!m.joinerAwaitingAnswer(r))return;
-const accepts=!!$('#joinerDateAccept')?.checked;
-const proposed=[field('joinerAlt1'),field('joinerAlt2')].filter(Boolean);
-if(!accepts&&!proposed.length)return toast('Add at least one date you would prefer.');
-if(!accepts&&r.offerDate&&proposed.some(d=>d<r.offerDate))return toast('A date cannot be before your offer date.');
+const date=field('joinerChosenDate');
+if(!date)return toast('Choose your joining date.');
+if(r.offerDate&&date<r.offerDate)return toast('Your joining date cannot be before your offer date.');
 const relocation=$('#joinerRelocYes')?.checked?'Needed':'Not needed';
 const note=field('joinerDateNote'),previous=structuredClone(state.onboarding);
-const p=m.joinerResponse(r,{relocation,accepts,proposed,note});
+m.askJoiner(r,date);
+const p=m.joinerResponse(r,{relocation,accepts:true,note});
 r.items.k_relocation={state:'Verified',note:'Joiner answered: relocation '+relocation.toLowerCase(),by:r.name,date:stamp()};
-r.items.k_joindate=accepts
-?{state:'Verified',note:'Joining date '+p.date+' accepted by the joiner',by:r.name,date:stamp()}
-:{state:'Submitted',note:'Joiner suggested '+proposed.join(' or ')+'. Awaiting HR review.',by:r.name,date:stamp()};
-log(r,accepts?'Joining date '+p.date+' accepted in the portal. Relocation '+relocation.toLowerCase()+'.':'Dates '+proposed.join(' or ')+' suggested in the portal. Relocation '+relocation.toLowerCase()+'.');
+r.items.k_joindate={state:'Verified',note:'Joining date '+p.date+' chosen by the joiner',by:r.name,date:stamp()};
+log(r,'Joining date '+p.date+' chosen in the portal. Relocation '+relocation.toLowerCase()+'.');
 if(note)log(r,'Note from the joiner: '+note);
-if(!persist(r,'Joining answer sent by '+r.name,()=>{state.onboarding=previous}))return;
-refresh();toast(accepts?'Thank you. Your joining date is confirmed.':'Thank you. Your dates are with HR.')};
+if(!persist(r,'Joining date chosen by '+r.name,()=>{state.onboarding=previous}))return;
+refresh();toast('Thank you. Your joining date is confirmed for '+p.date+'.')};
 
 /* ---------- documents ---------- */
 function documentCard(r,tasks){
