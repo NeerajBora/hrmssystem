@@ -71,8 +71,8 @@ ${confirmCard(r,proposal)}
 ${documentCard(r,tasks)}
 ${submitCard(r)}`}
 ${readyCard(r)}
-${progressCard(r)}
 ${noticeCard(r)}
+${progressCard(r)}
 
 <p class="joiner-foot">Fictional demonstration data. Uploads are recorded by file name only; no file content is stored or sent anywhere. This page has no sign-in and is not an authentication layer.</p>
 </main>`};
