@@ -55,7 +55,7 @@ Every case carries its own joiner link, opened from the case with Open the joine
 
 Auto-verify in the onboarding toolbar is a demonstration setting, on unless turned off: a document the joiner sends is verified as it arrives, so a case can be walked forward without checking each row. Turn it off to see the real rule, where sending and verifying are separate acts and a document waits at Submitted. Send all documents in the portal, and Clear remaining checks on the case, are the other two demonstration shortcuts; each says so in its label.
 
-Submitting closes the portal's working surface: the joining date, documents and checks give way to the messages NRL has sent, with a line saying everything is with HR and nothing is waiting on them. When access is released, the credentials card joins those messages.
+Submitting closes the portal's working surface: the joining date, the document list and the submit card give way to the messages NRL has sent, with a line saying everything is with HR and nothing is waiting on them. The checks HR is running stay on the page, so the joiner can still see what is moving. When access is released, the credentials card joins those messages.
 
 The joiner submits; HR decides. A joiner action only ever sets a document to Submitted: verifying, waiving, failing an item and advancing a stage stay with HR, and the model refuses a submission for an item that is not a joiner document, that is already cleared, or whose offer has not been accepted. A document HR marked Failed shows its reason and can be sent again. Uploads record the file name and size only; no file content is stored or transmitted.
 

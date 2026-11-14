@@ -69,9 +69,9 @@ return `<main class="joiner">
 ${waitingOnNRL?'':`${offerCard(r)}
 ${confirmCard(r,proposal)}
 ${documentCard(r,tasks)}
-${submitCard(r)}
-${progressCard(r)}`}
+${submitCard(r)}`}
 ${readyCard(r)}
+${progressCard(r)}
 ${noticeCard(r)}
 
 <p class="joiner-foot">Fictional demonstration data. Uploads are recorded by file name only; no file content is stored or sent anywhere. This page has no sign-in and is not an authentication layer.</p>
