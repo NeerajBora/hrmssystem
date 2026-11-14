@@ -55,7 +55,7 @@ return `<main class="joiner">
 <header class="joiner-top">
 <img src="assets/nrl-logo.png" alt="NRL" width="96" height="72">
 <div class="joiner-brand"><strong>Joining NRL</strong><small>Samanvay onboarding · demonstration</small></div>
-<button class="joiner-exit" onclick="joinerExit()">Back to the HRMS demo</button>
+<button class="joiner-exit" onclick="joinerExit('${r.portalToken}')">Back to the HRMS demo</button>
 </header>
 
 <section class="joiner-card joiner-hero">
@@ -305,5 +305,11 @@ return `<section class="joiner-card">
 <ul class="joiner-checks">${ours.map(i=>{const st=m.itemState(r,i.id);return `<li><span>${esc(i.name)}</span>${chip(st==='Pending'?'In hand':st,tone(st))}</li>`}).join('')}</ul>
 </section>`}
 
-global.joinerExit=function(){history.pushState(null,'',location.pathname+location.search);render();window.scrollTo(0,0)};
+/* Back goes where the link came from: the case this portal belongs to, when
+   the person leaving is the HR officer who opened it. */
+global.joinerExit=function(token){
+const r=token?caseByToken(token):null;
+history.pushState(null,'',location.pathname+location.search);
+if(r&&role==='HR officer'&&!signedOut){go('Employee Services');onboardingDetail(r.id,'overview');return}
+render();window.scrollTo(0,0)};
 })(typeof window!=='undefined'?window:globalThis);
