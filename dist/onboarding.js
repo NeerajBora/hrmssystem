@@ -499,7 +499,7 @@ return true}
 
 /* ---------- case list ---------- */
 global.onboardingSection=function(){if(!permitted())return '';
-seedSamples();
+if(!state.onboarding)state.onboarding=[];
 const all=records(),view=state.onboardingView||'Exceptions';
 const rows=all.map(r=>({r,s:summary(r)}));
 const month=new Date().toISOString().slice(0,7);
@@ -516,8 +516,8 @@ return card('Employee onboarding',`
 <div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Add new employee',"onboardingNew()",'primary')}${btn('Upload employee list',"onboardingUpload()")}</div></div>
 <div class="onboard-note">Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
-<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${btn('Reload sample joiners',"onboardingReseed()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
-${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Add a new employee or upload a list to begin.'}</div>`}
+<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"download('onboarding-template.csv','Employee Name\\nAditi Roy\\nRohan Sen\\n')")}</div>
+${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Add a new employee, upload a list, or load the sample joiners.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
 
 global.onboardingView=function(v){if(!permitted())return;state.onboardingView=v;render()};
@@ -544,6 +544,26 @@ state.onboarding=(state.onboarding||[]).filter(r=>!(r.batch&&!r.profile));
 if(!persist('Uploaded onboarding cases removed: '+removed,()=>{state.onboarding=previous}))return;
 $('#dialog').close();render();toast(removed+' uploaded case(s) removed.')};
 
+global.onboardingRemoveSamples=function(){if(!permitted())return;
+const samplesHere=records().filter(r=>r.sample);
+if(!samplesHere.length)return toast('No sample joiners to remove.');
+const withProfile=samplesHere.filter(r=>r.profile);
+modal('Remove sample joiners',`<p>This permanently removes ${samplesHere.length} fictional sample case(s) from this browser. This cannot be undone, although Load sample joiners brings fresh copies back.</p>
+${withProfile.length?`<div class="callout">${withProfile.length} of them also have a sample employee profile in People &amp; Service Records. That profile is removed with its case, so neither is left on its own.</div>`:''}
+<p class="sub">Cases you created with Add new employee or from an uploaded list are not touched.</p>`,
+btn('Cancel',"$('#dialog').close()")+btn('Remove '+samplesHere.length+' case(s)',"onboardingRemoveSamplesConfirm()",'primary'))};
+
+global.onboardingRemoveSamplesConfirm=function(){if(!permitted())return;
+const previous=structuredClone(state.onboarding||[]),previousProfiles=structuredClone(state.hrmsProfiles||[]);
+const going=records().filter(r=>r.sample);
+if(!going.length)return;
+const cases=new Set(going.map(r=>r.id));
+state.onboarding=(state.onboarding||[]).filter(r=>!r.sample);
+state.hrmsProfiles=(state.hrmsProfiles||[]).filter(p=>!cases.has(p.case));
+if(typeof syncPeople==='function')syncPeople();
+if(!persist('Sample onboarding cases removed: '+going.length,()=>{state.onboarding=previous;state.hrmsProfiles=previousProfiles}))return;
+$('#dialog').close();render();toast(going.length+' sample case(s) removed.')};
+
 global.onboardingReseed=function(){if(!permitted())return;
 const own=records().filter(r=>!r.sample).length;
 caseModal('Reload sample joiners',`<p>This replaces the twelve fictional sample cases with fresh copies, so the screens show the original spread of stages and exceptions.</p><p class="sub">${own?own+' case(s) you created here are kept and are not changed.':'No cases created here, so nothing of your own is affected.'} Changes made to the sample cases in this browser are discarded.</p>`,
@@ -551,7 +571,10 @@ btn('Cancel',"$('#dialog').close()")+btn('Reload samples',"onboardingReseedConfi
 
 global.onboardingReseedConfirm=function(){if(!permitted())return;
 const previous=state.onboarding||[];
-state.onboarding=[...previous.filter(r=>!r.sample),...samples()];
+const fresh=samples();
+state.onboarding=[...(previous||[]).filter(r=>!r.sample),...fresh];
+const complete=fresh.find(r=>r.stage===8);
+if(complete&&!(state.hrmsProfiles||[]).some(p=>p.case===complete.id)){const profile=draftProfile(complete);profile.createdOn='27/10/2026, 5:30 pm';profile.createdBy=complete.coordinator;profile.case=complete.id;complete.profile=profile;state.hrmsProfiles=[...(state.hrmsProfiles||[]),profile];if(typeof syncPeople==='function')syncPeople()}
 if(!persist('Sample onboarding cases reloaded',()=>{state.onboarding=previous}))return;
 $('#dialog').close();render();toast('Sample joiners reloaded.')};
 
