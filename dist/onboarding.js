@@ -349,8 +349,8 @@ local:'<path d="M5 16h14M6.5 16V9.8L8 6.5h8l1.5 3.3V16"/><circle cx="8.3" cy="16
 bank:'<path d="M4 9.5 12 5l8 4.5M5.5 10v7M10 10v7M14 10v7M18.5 10v7M4 19.5h16"/>',
 pan:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M7 10h4M7 13.5h7"/>',
 aadhaar:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 15.5c.6-1.3 1.7-2 3-2s2.4.7 3 2M15 10h3M15 13h3"/>'};
-const stepIcon=id=>`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${stepIcons[id]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
-const tickIcon='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+const stepIcon=id=>`<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${stepIcons[id]||'<circle cx="12" cy="12" r="8"/>'}</svg>`;
+const tickIcon='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
 
 /* Finance workflow: identity and bank verification gate the compensation. */
 const financeChecks=[
