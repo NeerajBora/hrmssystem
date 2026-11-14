@@ -173,11 +173,29 @@ ${item.kind==='signature'?`<button onclick="joinerSign('${r.portalToken}','${ite
 </div>`:''}
 </li>`};
 const cleared=tasks.filter(i=>['Verified','Waived'].includes(m.itemState(r,i.id))).length;
+const outstanding=tasks.filter(i=>!['Submitted','Verified','Waived'].includes(m.itemState(r,i.id))).length;
 return `<section class="joiner-card">
 <h2>Your documents</h2>
 <p class="joiner-note">${cleared} of ${tasks.length} cleared. HR checks each one; a document marked Failed can be sent again.</p>
+${outstanding?`<div class="joiner-actions"><button onclick="joinerSendAll('${r.portalToken}')">Send all ${outstanding} documents (demo)</button></div>`:''}
 <ul class="joiner-docs">${tasks.map(row).join('')}</ul>
 </section>`}
+
+/* A demonstration shortcut for the joiner: sends every document still
+   outstanding at once, instead of choosing fifteen files by hand. */
+global.joinerSendAll=function(token){const r=caseByToken(token);if(!r)return;
+const m=model();
+const pending=m.joinerTasks(r).filter(i=>!['Submitted','Verified','Waived'].includes(m.itemState(r,i.id)));
+if(!pending.length)return toast('Everything is already with HR.');
+const previous=structuredClone(state.onboarding);
+const auto=state.autoVerify!==false;
+for(const item of pending)r.items[item.id]=Object.assign(r.items[item.id]||{},{
+state:auto?'Verified':'Submitted',
+note:(item.kind==='signature'?'Signed by the joiner as '+r.name:'Uploaded '+item.id.replace(/^[a-z]_/,'').replace(/_/g,'-')+'.pdf')+' (demonstration fill)'+(auto?' · verified automatically for the demonstration':''),
+by:r.name,date:stamp()});
+log(r,pending.length+' document(s) sent from the portal for the demonstration'+(auto?' and verified automatically':''));
+if(!persist(r,pending.length+' documents sent by '+r.name,()=>{state.onboarding=previous}))return;
+refresh();toast(pending.length+' document(s) sent to HR.')};
 
 global.joinerUpload=function(token,itemId,file){const r=caseByToken(token);if(!r||!file)return;
 const allowed=model().joinerCanSubmit(r,itemId);
@@ -203,8 +221,10 @@ submit(r,itemId,'Signed by the joiner as '+typed)};
 function submit(r,itemId,note){
 const previous=structuredClone(state.onboarding);
 const item=model().checklist.find(i=>i.id===itemId);
-r.items[itemId]=Object.assign(r.items[itemId]||{},{state:'Submitted',note,by:r.name,date:stamp()});
-log(r,item.name+' submitted in the portal · '+note);
+/* The demonstration setting decides whether HR still has to check it. */
+const auto=state.autoVerify!==false;
+r.items[itemId]=Object.assign(r.items[itemId]||{},{state:auto?'Verified':'Submitted',note:note+(auto?' · verified automatically for the demonstration':''),by:r.name,date:stamp()});
+log(r,item.name+' submitted in the portal · '+note+(auto?' · verified automatically':''));
 if(!persist(r,'Document submitted by '+r.name+': '+item.name,()=>{state.onboarding=previous}))return;
 refresh();toast(item.name+' sent to HR.')}
 

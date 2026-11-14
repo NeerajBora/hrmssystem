@@ -517,6 +517,14 @@ let preview=[],fileName='',reading=0;
 const caseModal=(title,body,foot,wide)=>{modal(title,body,foot);const d=$('#dialog');d.classList.add('onb-buttons');if(wide)d.classList.add('onb-dialog')};
 
 const permitted=()=>role==='HR officer'&&!signedOut;
+/* Demonstration setting: a document the joiner sends is verified straight
+   away, so a case can be walked forward without HR checking each row. Turn it
+   off to see the real rule, where sending and verifying are separate acts. */
+const autoVerify=()=>state.autoVerify!==false;
+global.onboardingAutoVerify=function(){if(!permitted())return;
+state.autoVerify=!autoVerify();
+try{audit('Automatic verification of joiner documents turned '+(autoVerify()?'on':'off'));save()}catch{}
+render();toast(autoVerify()?'Documents the joiner sends are verified automatically.':'Documents the joiner sends now wait for HR to verify them.')};
 const now=()=>new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'});
 const today=()=>new Date().toISOString().slice(0,10);
 const tone=s=>['Ready','Complete','Verified'].includes(s)?'ok':['Blocked','Failed','Stopped'].includes(s)?'bad':['Pending follow-up','Submitted','Waived','Awaiting acceptance'].includes(s)?'info':'warn';
@@ -565,7 +573,7 @@ return card('Employee onboarding',`
 <div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Upload employee list',"onboardingUpload()",'primary')}</div></div>
 <div class="onboard-note">Cases start from an uploaded employee list. Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
-<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"onboardingTemplate()")}</div>
+<div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${btn('Auto-verify: '+(autoVerify()?'on':'off'),"onboardingAutoVerify()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"onboardingTemplate()")}</div>
 ${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Upload an employee list, or load the sample joiners.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
 
@@ -808,7 +816,7 @@ ${r.needsInfo?`<div class="callout">Employee information is incomplete for this 
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
 <div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
-<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}${r.acceptance==='Yes'&&r.stage>=3&&!r.submittedOn&&joinerTasks(r).some(i=>!['Submitted','Verified','Waived'].includes(itemState(r,i.id)))?btn('Fill joiner documents (demo)',`onboardingFillDocs('${r.id}')`):''}${r.acceptance==='Yes'&&r.stage>=3&&s.open.length?btn('Clear remaining checks (demo)',`onboardingClearChecks('${r.id}')`):''}</div>
+<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}${r.acceptance==='Yes'&&r.stage>=3&&s.open.length?btn('Clear remaining checks (demo)',`onboardingClearChecks('${r.id}')`):''}</div>
 ${confirmPanel(r)}
 ${workflowPanel(r)}
 ${profilePanel(r)}`,
@@ -821,23 +829,6 @@ const foot=caseView==='overview'
 :`<div class="onb-footleft"><button class="onb-back" onclick="onboardingDetail('${r.id}','overview')">${icon.back}Back</button></div>${btn('Close',"$('#dialog').close()")}`;
 
 caseModal('Onboarding workflow',body[caseView]||body.overview,foot,true)};
-
-/* A demonstration shortcut: fills what the joiner would have sent, so a
-   checklist can be shown without uploading fifteen files. It stops at
-   Submitted, leaves anything HR already cleared alone, and does not submit
-   the case: the joiner still presses Submit in the portal. */
-global.onboardingFillDocs=function(id){if(!permitted())return;const r=find(id);if(!r)return;
-if(r.acceptance!=='Yes'||r.submittedOn)return toast('Nothing to fill on this case.');
-const pending=joinerTasks(r).filter(i=>!['Submitted','Verified','Waived'].includes(itemState(r,i.id)));
-if(!pending.length)return toast('The joiner documents are already in.');
-const previous=structuredClone(state.onboarding);
-for(const item of pending)r.items[item.id]=Object.assign(r.items[item.id]||{},{
-state:'Submitted',
-note:item.kind==='signature'?'Signed by the joiner as '+r.name+' (demonstration fill)':'Uploaded '+item.id.replace(/^[a-z]_/,'').replace(/_/g,'-')+'.pdf (demonstration fill)',
-by:r.name,date:now()});
-log(r,pending.length+' joiner document(s) filled for the demonstration. The joiner has not submitted the case.');
-if(!persist('Joiner documents filled for the demonstration: '+r.name,()=>{state.onboarding=previous}))return;
-render();onboardingDetail(id);toast(pending.length+' document(s) marked Submitted. The joiner still has to submit.')};
 
 /* The other half of the demonstration shortcut: clears what HR would have
    verified at this stage, including the hard blocks and the joining
@@ -854,13 +845,18 @@ modal('Clear the remaining checks',`<p>This marks the ${due.length} item(s) stil
 ${settles?'<p class="sub">The joining confirmation is recorded as agreed on the joining date already held on the case.</p>':''}`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Clear '+due.length+' item(s)',`onboardingClearChecksConfirm('${id}')`,'primary'))};
 
+function settleOpen(r){
+const due=summary(r).open;
+for(const item of due)r.items[item.id]=Object.assign(r.items[item.id]||{},{state:'Verified',note:'Cleared for the demonstration',by:person().name,date:now()});
+if(due.some(i=>i.id==='k_relocation'||i.id==='k_joindate')&&proposalOf(r).state!=='Accepted'){
+r.joiningProposal={state:'Accepted',date:r.joiningDate||'',relocation:r.relocating?'Needed':'Not needed',proposed:[],note:''}}
+return due.length}
+
 global.onboardingClearChecksConfirm=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const due=summary(r).open;
 if(!due.length)return;
 const previous=structuredClone(state.onboarding);
-for(const item of due)r.items[item.id]=Object.assign(r.items[item.id]||{},{state:'Verified',note:'Cleared for the demonstration',by:person().name,date:now()});
-if(due.some(i=>i.id==='k_relocation'||i.id==='k_joindate')&&proposalOf(r).state!=='Accepted'){
-r.joiningProposal={state:'Accepted',date:r.joiningDate||'',relocation:r.relocating?'Needed':'Not needed',proposed:[],note:''}}
+settleOpen(r);
 log(r,due.length+' item(s) cleared for the demonstration at '+stageName(r.stage));
 if(!persist('Checks cleared for the demonstration: '+r.name,()=>{state.onboarding=previous}))return;
 render();onboardingDetail(id);toast(due.length+' item(s) cleared.')};
