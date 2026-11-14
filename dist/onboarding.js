@@ -35,6 +35,8 @@ const checklist=[
 {id:'c_licence',name:'Professional licence',group:'Joining conditions',stage:3,kind:'condition',hard:true,when:'licence'},
 {id:'c_security',name:'Security clearance',group:'Joining conditions',stage:3,kind:'condition',when:'security'},
 {id:'c_other',name:'Other eligibility checks',group:'Joining conditions',stage:3,kind:'condition',optional:true},
+{id:'k_relocation',name:'Relocation requirement confirmed by joiner',group:'Joining confirmation',stage:3,kind:'task'},
+{id:'k_joindate',name:'Joining date accepted by joiner',group:'Joining confirmation',stage:3,kind:'task'},
 {id:'p_relieving',name:'Relieving document',group:'Previous employment',stage:3,kind:'document',when:'experienced'},
 {id:'p_release',name:'Release confirmation from previous employer',group:'Previous employment',stage:3,kind:'check',when:'experienced'},
 {id:'p_settlement',name:'Outstanding settlement information',group:'Previous employment',stage:3,kind:'document',when:'experienced',optional:true},
@@ -104,6 +106,101 @@ if(s.failed.length)return {ok:false,reason:'Resolve the failed item: '+s.failed[
 if(s.open.length)return {ok:false,reason:'Outstanding at this stage: '+s.missing.slice(0,3).join(', ')+(s.missing.length>3?' and '+(s.missing.length-3)+' more':'')+'.'};
 return {ok:true}}
 
+/* ---------------------------------------------------------------------------
+   Joining confirmation, employee identifier and the profile draft.
+   The joiner answers the relocation question and either accepts the proposed
+   joining date or suggests other dates, which HR then reviews. The identifier
+   is issued when the case reaches Ready to join, and the profile is drafted
+   from the case for HR to review and approve. Nothing is created silently.
+--------------------------------------------------------------------------- */
+const proposalStates=['Not asked','Awaiting joiner','Accepted','Alternative proposed'];
+
+function proposalOf(record){return record.joiningProposal||{state:'Not asked',date:record.joiningDate||'',relocation:null,proposed:[],note:''}}
+
+function askJoiner(record,date){
+record.joiningProposal={state:'Awaiting joiner',date,relocation:null,proposed:[],note:'',askedOn:record.askedOn||date};
+return record.joiningProposal}
+
+function joinerResponse(record,answer){
+const proposal=proposalOf(record);
+proposal.relocation=answer.relocation==='Needed'?'Needed':'Not needed';
+record.relocating=proposal.relocation==='Needed';
+if(answer.accepts){proposal.state='Accepted';proposal.proposed=[];record.joiningDate=proposal.date}
+else{proposal.state='Alternative proposed';proposal.proposed=(answer.proposed||[]).filter(Boolean)}
+proposal.note=answer.note||'';
+record.joiningProposal=proposal;
+return proposal}
+
+function acceptProposedDate(record,date){
+const proposal=proposalOf(record);
+proposal.state='Accepted';proposal.date=date;proposal.proposed=[];
+record.joiningDate=date;record.joiningProposal=proposal;
+return proposal}
+
+/* A new identifier never reuses one already held by an employee or another
+   case. Agency contracts use the agency series. */
+function nextEmployeeId(record,taken){
+const agency=record.employmentType==='Agency contract';
+const prefix=agency?'AGY-':'PSU-';
+const width=agency?3:4;
+const floor=agency?81:8000;
+let highest=floor;
+for(const id of taken||[]){
+if(typeof id!=='string'||!id.startsWith(prefix))continue;
+const number=parseInt(id.slice(prefix.length),10);
+if(Number.isFinite(number)&&number>=highest)highest=number}
+return prefix+String(highest+1).padStart(width,'0')}
+
+const categoryOf=record=>record.employmentType==='Agency contract'?'Agency worker':record.employmentType==='Apprentice / trainee'?'Apprentice':record.employmentType==='Permanent non-executive'?'Workman':/^E/.test(record.grade||'')?'Executive':'Workman';
+const employmentOf=record=>record.employmentType==='Fixed-term contract'?'Fixed-term':record.employmentType==='Agency contract'?'Agency contract':record.employmentType==='Apprentice / trainee'?'Apprentice':'Permanent';
+const fieldRole=record=>/field|project|expansion/i.test((record.dept||'')+' '+(record.designation||''));
+const operationsRole=record=>/operation|utilit|maintenance|refinery|production|quality/i.test((record.dept||'')+' '+(record.designation||''));
+
+/* The working pattern follows the role, not the person. */
+function workPattern(record){
+const category=categoryOf(record);
+if(category==='Apprentice')return {shift:'General',hours:'09:00–16:30',weekly:36,off:'Saturday and Sunday',scheme:'Training attendance'};
+if(fieldRole(record))return {shift:'Field duty',hours:'08:00–17:00',weekly:45,off:'By field roster',scheme:'Field attendance'};
+if(category==='Executive')return {shift:'General',hours:'09:00–17:30',weekly:42.5,off:'Saturday and Sunday',scheme:'General attendance'};
+if(operationsRole(record))return {shift:'Rotating',hours:'8 hours per shift, three shifts',weekly:42,off:'By shift roster',scheme:'Shift attendance'};
+return {shift:'General',hours:'09:00–17:30',weekly:42.5,off:'Saturday and Sunday',scheme:'General attendance'}}
+
+function probationEnd(record){
+const start=record.joiningDate;if(!start)return '';
+const months=employmentOf(record)==='Permanent'?12:6;
+const date=new Date(start+'T00:00:00Z');
+date.setUTCMonth(date.getUTCMonth()+months);
+return date.toISOString().slice(0,10)}
+
+/* The draft a person reviews before any profile is created. */
+function draftProfile(record){
+const pattern=workPattern(record);
+const category=categoryOf(record);
+const employment=employmentOf(record);
+const entitled=employment!=='Agency contract';
+return {
+id:record.employeeId||'',
+name:record.name,
+job:record.designation||'Not recorded',
+category,
+dept:record.dept||'Not recorded',
+location:record.location||'Not recorded',
+shift:pattern.shift,
+grade:record.grade||'',
+employment,
+workHours:pattern.hours,
+weeklyHours:pattern.weekly,
+weeklyOff:pattern.off,
+attendanceScheme:pattern.scheme,
+joiningDate:record.joiningDate||'',
+probationEnd:probationEnd(record),
+manager:record.manager||'Not recorded',
+payrollGroup:category==='Agency worker'?'Agency billing, not PSU payroll':category+' payroll, monthly',
+leaveEntitlement:entitled?'PSU leave rules for '+category.toLowerCase():'Agency contract terms, no PSU leave entitlement',
+access:['HRMS self-service','Attendance','Payroll documents'].concat(category==='Executive'?['Team approvals']:[]).concat(pattern.shift==='Rotating'?['Shift roster']:[]),
+training:[{name:'Safety induction',due:record.joiningDate||'',renewal:'12 months'}].concat(operationsRole(record)?[{name:'Unit-specific operations training',due:record.joiningDate||'',renewal:'24 months'}]:[]).concat(fieldRole(record)?[{name:'Work-at-height and field safety',due:record.joiningDate||'',renewal:'12 months'}]:[]),
+source:'Drafted from onboarding case '+record.id}}
+
 function ensureRecord(record){
 if(!record.stage)record.stage=1;
 if(!record.items)record.items={};
@@ -130,6 +227,11 @@ offerRef:'OFR-2026-'+String(n).padStart(4,'0'),offerDate:'2026-10-20',manager:'R
 address:'Golaghat district, Assam',needsInfo:false,sample:true},fields));
 fill(record,upto===undefined?record.stage:upto,overrides);
 record.history=(story||[]).map(([date,action])=>({date,action,by:record.coordinator}));
+/* Later stages already settled the joining confirmation and hold an identifier. */
+if(record.stage>=4){
+record.joiningProposal={state:'Accepted',date:record.joiningDate,relocation:record.relocating?'Needed':'Not needed',proposed:[],note:''};
+record.employeeId=record.employeeId||(record.employmentType==='Agency contract'?'AGY-':'PSU-')+(record.employmentType==='Agency contract'?String(81+n):String(8300+n));
+}
 return record}
 
 function samples(){return [
@@ -177,7 +279,7 @@ sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Material
 {d_identity:{state:'Verified'},d_education:{state:'Verified'},d_bank:{state:'Submitted'},c_medical:{state:'Verified'},s_agreement:{state:'Verified'},c_security:{state:'Submitted',note:'Security clearance request sent to the competent authority'}},
 [['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
 
-const model={stages,checklist,groups,states,employmentTypes,applicable,itemState,summary,canAdvance,samples,parse};
+const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,nextEmployeeId,draftProfile,workPattern,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -202,7 +304,13 @@ const ensure=ensureRecord;
 
 /* Sample joiners are seeded once, so the HR screens are not empty on a first
    visit or after a demonstration reset. They can be removed or reloaded. */
-function seedSamples(){if(state.onboarding)return false;state.onboarding=samples();try{save()}catch{}return true}
+function seedSamples(){if(state.onboarding)return false;
+state.onboarding=samples();
+/* The completed sample joiner already has a profile in the directory. */
+const complete=state.onboarding.find(r=>r.stage===8);
+if(complete){const profile=draftProfile(complete);profile.createdOn='27/10/2026, 5:30 pm';profile.createdBy=complete.coordinator;profile.case=complete.id;complete.profile=profile;state.hrmsProfiles=[profile]}
+if(typeof syncPeople==='function')syncPeople();
+try{save()}catch{}return true}
 
 function log(record,action){record.history.unshift({date:now(),action,by:person().name})}
 
@@ -337,6 +445,33 @@ return `<details class="onb-group" ${openHere&&items[0].stage<=r.stage?'open':''
 ${items.map(i=>{const st=itemState(r,i.id),entry=r.items[i.id]||{};return `<tr><td>${esc(i.name)}${i.hard?' <em class="onb-hard">hard block</em>':''}${i.optional?' <em class="onb-soft">if applicable</em>':''}</td><td>${i.stage}</td><td>${chip(st,tone(st))}</td><td>${entry.note?`<small data-i18n-user>${esc(entry.note)}</small>`:''}${(entry.thread||[]).map(t=>`<div class="onb-thread"><small data-i18n-user>${esc(t.date)} · ${esc(t.by)}: ${esc(t.text)}</small></div>`).join('')}</td><td class="onb-rowactions">${btn('Update',`onboardingItem('${r.id}','${i.id}')`,'link')}${btn('Ask',`onboardingAsk('${r.id}','${i.id}')`,'link')}</td></tr>`}).join('')}
 </tbody></table></div></details>`}).join('');
 const stageAction=r.stage===1&&r.acceptance!=='Yes'?`${btn('Record acceptance: Yes',`onboardingAcceptance('${r.id}','Yes')`,'primary')}${btn('Record acceptance: No',`onboardingAcceptance('${r.id}','No')`)}`:'';
+
+/* Joining date and relocation, confirmed with the joiner during pre-joining. */
+function confirmPanel(r){
+if(r.stage<3||r.acceptance==='No')return '';
+const p=proposalOf(r),asked=p.state!=='Not asked';
+const answered=p.state==='Accepted';
+const rows=[['Relocation',p.relocation||'Not answered yet'],['Proposed joining date',p.date||'Not proposed'],['Joiner response',p.state]];
+if(p.proposed.length)rows.push(['Dates suggested by the joiner',p.proposed.join(' · ')]);
+if(p.note)rows.push(['Joiner note',p.note]);
+const actions=r.stage>3?'':p.state==='Not asked'?btn('Ask the joiner to confirm',`onboardingAskJoining('${r.id}')`,'primary')
+:p.state==='Awaiting joiner'?btn('Record the joiner response',`onboardingJoinerReply('${r.id}')`,'primary')+btn('Change the proposed date',`onboardingAskJoining('${r.id}')`)
+:p.state==='Alternative proposed'?btn('Review the suggested dates',`onboardingReviewDates('${r.id}')`,'primary')
+:btn('Reopen the confirmation',`onboardingAskJoining('${r.id}')`);
+return `<h3>Joining confirmation</h3>
+<p class="sub">The joiner answers the relocation question and either accepts the proposed joining date or suggests other dates. HR reviews any suggestion. The case reaches Ready to join only once both are settled.</p>
+${answered?`<div class="callout">Joining date ${esc(p.date)} accepted by the joiner. Relocation: ${esc(p.relocation||'not answered')}.</div>`:asked?'':'<div class="callout">The joiner has not been asked yet. The joining date on the offer is a proposal until the joiner accepts it.</div>'}
+${profilePairs(rows)}
+<div class="toolbar onb-actions">${actions}</div>`}
+
+/* The employee identifier and the profile drafted for HR to approve. */
+function profilePanel(r){
+if(r.stage<4||r.acceptance==='No')return '';
+const draft=r.profile;
+return `<h3>Employee record</h3>
+${r.employeeId?`<div class="callout">Employee identifier <strong>${esc(r.employeeId)}</strong> was issued when this case reached Ready to join.</div>`:'<div class="callout">No employee identifier issued yet.</div>'}
+${draft?`<p class="sub">Profile created in the HRMS portal on ${esc(draft.createdOn)} by ${esc(draft.createdBy)}, from the draft reviewed in this case.</p>${profilePairs([['Employee ID',draft.id],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Probation ends',draft.probationEnd||'Not applicable'],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name).join(', ')]])}<div class="toolbar onb-actions">${btn('Open in People & Service Records',`onboardingOpenProfile('${r.id}')`)}</div>`
+:`<p class="sub">The profile agent drafts the working pattern, payroll group, leave entitlement, access and training from this case. HR reviews the draft before any profile is created.</p><div class="toolbar onb-actions">${btn('Draft the employee profile',`onboardingDraftProfile('${r.id}')`,'primary')}</div>`}`}
 modal('Onboarding case',`
 <h3 data-i18n-user>${esc(r.name)}</h3>
 <div class="onb-head">${chip(s.status,tone(s.status))}<span class="onb-progress"><i style="width:${s.percent}%"></i></span><small>${s.done} of ${s.total} checklist items cleared</small></div>
@@ -346,6 +481,8 @@ ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The c
 <p class="sub">${esc(stages[r.stage-1].note)}</p>
 <div class="toolbar onb-actions">${stageAction}${r.acceptance!=='No'&&r.stage>1&&next?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,adv.ok?'primary':''):''}${btn('Edit information',`onboardingNew('${r.id}')`)}</div>
 ${adv.ok||r.stage===1?'':`<div class="callout">Cannot advance yet. ${esc(adv.reason)}</div>`}
+${confirmPanel(r)}
+${profilePanel(r)}
 <h3>Employee information</h3>${info}
 <h3>Checklist</h3>
 <p class="sub">Verification runs document by document. A failed document does not stop the other documents, unless it is a hard block.</p>
@@ -374,8 +511,117 @@ const check=canAdvance(r);if(!check.ok)return toast(check.reason);
 const note=val('onbAdvanceNote'),previous=structuredClone(state.onboarding);
 r.stage=Math.min(8,r.stage+1);
 log(r,'Stage advanced to '+stageName(r.stage)+(note?' · '+note:''));
+if(r.stage>=4&&!r.employeeId){issueEmployeeId(r);log(r,'Employee identifier '+r.employeeId+' issued on reaching Ready to join')}
 if(!persist('Onboarding stage advanced for '+r.name+' to '+stageName(r.stage),()=>{state.onboarding=previous}))return;
 render();onboardingDetail(id);toast('Stage advanced to '+stageName(r.stage)+'.')};
+
+/* ---------- joining confirmation ---------- */
+const setItem=(record,itemId,state,note)=>{record.items[itemId]=Object.assign(record.items[itemId]||{},{state,note:note||'',by:person().name,date:now()})};
+
+global.onboardingAskJoining=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const p=proposalOf(r);
+modal('Ask the joiner to confirm',`<p>Send <strong data-i18n-user>${esc(r.name)}</strong> the proposed joining date and the relocation question. The joiner can accept the date or suggest other dates.</p>
+<label class="field full">Proposed joining date<input id="onbProposeDate" type="date" value="${esc(p.date||r.joiningDate||'')}"></label>
+<p class="sub">Relocation is asked as a question, not assumed. The answer decides whether travel, accommodation and transport appear on this checklist.</p>`,
+btn('Cancel',`onboardingDetail('${id}')`)+btn('Send to the joiner',`onboardingAskJoiningSave('${id}')`,'primary'))};
+
+global.onboardingAskJoiningSave=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const date=val('onbProposeDate');
+if(!date)return toast('Enter the proposed joining date.');
+if(r.offerDate&&date<r.offerDate)return toast('The joining date cannot be before the offer date.');
+const previous=structuredClone(state.onboarding);
+askJoiner(r,date);
+setItem(r,'k_relocation','Submitted','Relocation question sent to the joiner');
+setItem(r,'k_joindate','Submitted','Joining date '+date+' proposed to the joiner');
+log(r,'Joining date '+date+' and the relocation question sent to the joiner');
+if(!persist('Joining confirmation requested for '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDetail(id);toast('Sent to the joiner. Awaiting the response.')};
+
+global.onboardingJoinerReply=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const p=proposalOf(r);
+modal('Record the joiner response',`<p class="sub">Recorded as received from <strong data-i18n-user>${esc(r.name)}</strong>. HR records the answer; the joiner does not change the case directly in this demonstration.</p>
+<h3>Relocation</h3>
+<div class="onb-flags">
+<label class="onb-flag"><input type="radio" name="onbReloc" id="onbRelocNeeded" ${r.relocating?'checked':''}><span>Relocation is needed</span></label>
+<label class="onb-flag"><input type="radio" name="onbReloc" id="onbRelocNot" ${r.relocating?'':'checked'}><span>Relocation is not needed</span></label>
+</div>
+<h3>Joining date</h3>
+<div class="onb-flags">
+<label class="onb-flag"><input type="radio" name="onbDateAnswer" id="onbDateAccept" checked onchange="onboardingToggleDates()"><span>Accepts ${esc(p.date||r.joiningDate||'the proposed date')}</span></label>
+<label class="onb-flag"><input type="radio" name="onbDateAnswer" id="onbDatePropose" onchange="onboardingToggleDates()"><span>Suggests other dates for HR to review</span></label>
+</div>
+<div id="onbDateOptions" hidden><div class="formgrid">
+<label class="field">First preference<input id="onbAlt1" type="date"></label>
+<label class="field">Second preference<input id="onbAlt2" type="date"></label>
+</div></div>
+<label class="field full">Note from the joiner (optional)<input id="onbJoinerNote" maxlength="160" placeholder="e.g. Notice period ends on 10 December"></label>`,
+btn('Cancel',`onboardingDetail('${id}')`)+btn('Record response',`onboardingJoinerReplySave('${id}')`,'primary'))};
+
+global.onboardingToggleDates=function(){const box=$('#onbDateOptions');if(box)box.hidden=!$('#onbDatePropose')?.checked};
+
+global.onboardingJoinerReplySave=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const accepts=!!$('#onbDateAccept')?.checked;
+const proposed=[val('onbAlt1'),val('onbAlt2')].filter(Boolean);
+if(!accepts&&!proposed.length)return toast('Enter at least one date suggested by the joiner.');
+if(!accepts&&r.offerDate&&proposed.some(d=>d<r.offerDate))return toast('A suggested date cannot be before the offer date.');
+const previous=structuredClone(state.onboarding);
+const relocation=$('#onbRelocNeeded')?.checked?'Needed':'Not needed';
+const note=val('onbJoinerNote');
+const p=joinerResponse(r,{relocation,accepts,proposed,note});
+setItem(r,'k_relocation','Verified','Joiner answered: relocation '+relocation.toLowerCase());
+if(accepts){setItem(r,'k_joindate','Verified','Joining date '+p.date+' accepted by the joiner');log(r,'Joiner accepted the joining date '+p.date+'. Relocation '+relocation.toLowerCase()+'.')}
+else{setItem(r,'k_joindate','Submitted','Joiner suggested '+proposed.join(' or ')+'. Awaiting HR review.');log(r,'Joiner suggested '+proposed.join(' or ')+' instead of '+p.date+'. Awaiting HR review.')}
+if(note)log(r,'Note from the joiner: '+note);
+if(!persist('Joiner response recorded for '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDetail(id);toast(accepts?'Joining date accepted.':'Suggested dates recorded for HR review.')};
+
+global.onboardingReviewDates=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const p=proposalOf(r);
+modal('Review the suggested dates',`<p><strong data-i18n-user>${esc(r.name)}</strong> did not accept ${esc(p.date)} and suggested the dates below.</p>
+${p.note?`<div class="callout" data-i18n-user>Note from the joiner: ${esc(p.note)}</div>`:''}
+<div class="toolbar onb-actions">${p.proposed.map(d=>btn('Accept '+d,`onboardingAcceptDate('${id}','${d}')`,'primary')).join('')}</div>
+<p class="sub">Or propose a different date, which goes back to the joiner for acceptance.</p>
+<label class="field full">Different date<input id="onbProposeDate" type="date" value="${esc(p.proposed[0]||'')}"></label>`,
+btn('Cancel',`onboardingDetail('${id}')`)+btn('Propose this date instead',`onboardingAskJoiningSave('${id}')`))};
+
+global.onboardingAcceptDate=function(id,date){if(!permitted())return;const r=find(id);if(!r)return;
+const previous=structuredClone(state.onboarding);
+acceptProposedDate(r,date);
+setItem(r,'k_joindate','Verified','Joining date '+date+' agreed after HR review');
+log(r,'HR accepted the joining date '+date+' suggested by the joiner');
+if(!persist('Joining date agreed for '+r.name+': '+date,()=>{state.onboarding=previous}))return;
+render();onboardingDetail(id);toast('Joining date set to '+date+'.')};
+
+/* ---------- employee identifier and profile ---------- */
+function issueEmployeeId(record){
+if(record.employeeId)return record.employeeId;
+const taken=people.map(p=>p.id).concat(records().map(r=>r.employeeId).filter(Boolean));
+record.employeeId=nextEmployeeId(record,taken);
+return record.employeeId}
+
+global.onboardingDraftProfile=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
+const draft=draftProfile(r);
+modal('Employee profile draft',`<p class="sub">Drafted from onboarding case ${esc(r.id)} by the profile agent. Nothing is created until HR approves this draft. Review the working pattern and entitlement before approving.</p>
+${profilePairs([['Employee ID',draft.id],['Name',draft.name],['Designation',draft.job],['Category',draft.category],['Department',draft.dept],['Work location',draft.location],['Employment',draft.employment],['Grade',draft.grade||'Not recorded'],['Working pattern',draft.shift],['Work hours',draft.workHours],['Hours per week',String(draft.weeklyHours)],['Weekly off',draft.weeklyOff],['Attendance scheme',draft.attendanceScheme],['Joining date',draft.joiningDate||'Not confirmed'],['Probation ends',draft.probationEnd||'Not applicable'],['Reporting manager',draft.manager],['Payroll group',draft.payrollGroup],['Leave entitlement',draft.leaveEntitlement],['Access',draft.access.join(', ')],['Training',draft.training.map(t=>t.name+' (renew every '+t.renewal+')').join(' · ')]])}
+<div class="callout">Approving adds this profile to People &amp; Service Records in this browser. No payroll, attendance device, or external system is written.</div>`,
+btn('Cancel',`onboardingDetail('${id}')`)+btn('Approve and create profile',`onboardingCreateProfile('${id}')`,'primary'))};
+
+global.onboardingCreateProfile=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+if(!r.employeeId)return toast('The employee identifier is issued at Ready to join.');
+if(r.profile)return toast('A profile already exists for this case.');
+const previousCases=structuredClone(state.onboarding),previousProfiles=structuredClone(state.hrmsProfiles||[]);
+const draft=draftProfile(r);
+draft.createdOn=now();draft.createdBy=person().name;draft.case=r.id;
+r.profile=draft;
+state.hrmsProfiles=[...(state.hrmsProfiles||[]),draft];
+if(typeof syncPeople==='function')syncPeople();
+log(r,'Employee profile created in the HRMS portal for '+draft.id+' · '+draft.shift+' pattern, '+draft.workHours);
+if(!persist('Employee profile created for '+r.name+' ('+draft.id+')',()=>{state.onboarding=previousCases;state.hrmsProfiles=previousProfiles}))return;
+render();onboardingDetail(id);toast('Profile created for '+draft.id+'.')};
+
+global.onboardingOpenProfile=function(id){if(!permitted())return;const r=find(id);if(!r||!r.profile)return;
+$('#dialog').close();profileId=r.profile.id;go('People & Service Records');openProfile(r.profile.id)};
 
 global.onboardingItem=function(id,itemId){if(!permitted())return;const r=find(id);if(!r)return;
 const item=checklist.find(i=>i.id===itemId);if(!item)return;
