@@ -792,7 +792,7 @@ ${r.needsInfo?`<div class="callout">Employee information is incomplete for this 
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
 <div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
-<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}${r.acceptance==='Yes'&&r.stage>=3&&!r.submittedOn&&joinerTasks(r).some(i=>!['Submitted','Verified','Waived'].includes(itemState(r,i.id)))?btn('Fill joiner documents (demo)',`onboardingFillDocs('${r.id}')`):''}</div>
+<div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}${r.acceptance==='Yes'&&r.stage>=3&&!r.submittedOn&&joinerTasks(r).some(i=>!['Submitted','Verified','Waived'].includes(itemState(r,i.id)))?btn('Fill joiner documents (demo)',`onboardingFillDocs('${r.id}')`):''}${r.acceptance==='Yes'&&r.stage>=3&&s.open.length?btn('Clear remaining checks (demo)',`onboardingClearChecks('${r.id}')`):''}</div>
 ${confirmPanel(r)}
 ${workflowPanel(r)}
 ${profilePanel(r)}`,
@@ -822,6 +822,32 @@ by:r.name,date:now()});
 log(r,pending.length+' joiner document(s) filled for the demonstration. The joiner has not submitted the case.');
 if(!persist('Joiner documents filled for the demonstration: '+r.name,()=>{state.onboarding=previous}))return;
 render();onboardingDetail(id);toast(pending.length+' document(s) marked Submitted. The joiner still has to submit.')};
+
+/* The other half of the demonstration shortcut: clears what HR would have
+   verified at this stage, including the hard blocks and the joining
+   confirmation, so a case can be walked forward without working through every
+   row. It never advances the stage and never submits for the joiner. */
+global.onboardingClearChecks=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+if(r.acceptance!=='Yes')return toast('Record the offer acceptance first.');
+const due=summary(r).open;
+if(!due.length)return toast('Nothing outstanding at this stage.');
+const settles=due.some(i=>i.id==='k_relocation'||i.id==='k_joindate');
+modal('Clear the remaining checks',`<p>This marks the ${due.length} item(s) still open at <strong>${esc(stageName(r.stage))}</strong> as cleared, so the case can be walked forward in a demonstration.</p>
+<div class="tablewrap" style="max-height:200px;overflow:auto"><table><thead><tr><th>ITEM</th><th>STATE</th></tr></thead><tbody>${due.map(i=>`<tr><td>${esc(i.name)}${i.hard?' <em class="onb-hard">hard block</em>':''}</td><td>${esc(itemState(r,i.id))}</td></tr>`).join('')}</tbody></table></div>
+<div class="callout">Hard blocks such as medical fitness are cleared too. In a real case each of these is somebody's decision with evidence behind it.</div>
+${settles?'<p class="sub">The joining confirmation is recorded as agreed on the joining date already held on the case.</p>':''}`,
+btn('Cancel',`onboardingDetail('${id}')`)+btn('Clear '+due.length+' item(s)',`onboardingClearChecksConfirm('${id}')`,'primary'))};
+
+global.onboardingClearChecksConfirm=function(id){if(!permitted())return;const r=find(id);if(!r)return;
+const due=summary(r).open;
+if(!due.length)return;
+const previous=structuredClone(state.onboarding);
+for(const item of due)r.items[item.id]=Object.assign(r.items[item.id]||{},{state:'Verified',note:'Cleared for the demonstration',by:person().name,date:now()});
+if(due.some(i=>i.id==='k_relocation'||i.id==='k_joindate')&&proposalOf(r).state!=='Accepted'){
+r.joiningProposal={state:'Accepted',date:r.joiningDate||'',relocation:r.relocating?'Needed':'Not needed',proposed:[],note:''}}
+log(r,due.length+' item(s) cleared for the demonstration at '+stageName(r.stage));
+if(!persist('Checks cleared for the demonstration: '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDetail(id);toast(due.length+' item(s) cleared.')};
 
 /* The joiner's own link into this case. */
 global.onboardingPortal=function(id){if(!permitted())return;const r=find(id);if(!r)return;
