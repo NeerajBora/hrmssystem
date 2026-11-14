@@ -484,7 +484,8 @@ let caseView='overview';
 global.onboardingDetail=function(id,view){if(!permitted())return;const r=find(id);if(!r)return;
 if(view)caseView=view;
 const s=summary(r),adv=canAdvance(r),next=stages[r.stage];
-const track=stages.map(st=>`<li class="${r.stage>st.n?'done':r.stage===st.n?'current':''}"><span>${st.n}</span><strong>${st.name}</strong></li>`).join('');
+const tick='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+const track=stages.map(st=>{const cls=r.stage>st.n?'done':r.stage===st.n?'current':'ahead';return `<li class="${cls}"><span>${cls==='done'?tick:st.n}</span><strong>${st.name}</strong></li>`}).join('');
 const info=profilePairs([['Case ID',caseRef(r.id)],['Status',s.status],['Stage',r.stage+' of 8 · '+stageName(r.stage)],
 ['Designation',r.designation||'Not recorded'],['Grade',r.grade||'Not recorded'],['Department',r.dept||'Not recorded'],
 ['Employment type',r.employmentType||'Not recorded'],['Work location',r.location||'Not recorded'],
@@ -542,6 +543,7 @@ overview:`
 <div class="onb-head">${chip(s.status,tone(s.status))}<span class="onb-progress"><i style="width:${s.percent}%"></i></span><small>${s.done} of ${s.total} checklist items cleared</small></div>
 ${r.needsInfo?`<div class="callout">Employee information is incomplete for this case. ${btn('Add employee information',`onboardingNew('${r.id}')`,'link')}</div>`:''}
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
+<div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
 <div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}</div>
 ${confirmPanel(r)}

@@ -1136,5 +1136,13 @@ window.SAMANVAY_HI = {
   "Activity history": "गतिविधि इतिहास",
   "Back": "वापस",
   "cleared": "निपटाए गए",
-  "open": "खुले"
+  "open": "खुले",
+  "Stage 1 of 8": "चरण 1 / 8",
+  "Stage 2 of 8": "चरण 2 / 8",
+  "Stage 3 of 8": "चरण 3 / 8",
+  "Stage 4 of 8": "चरण 4 / 8",
+  "Stage 5 of 8": "चरण 5 / 8",
+  "Stage 6 of 8": "चरण 6 / 8",
+  "Stage 7 of 8": "चरण 7 / 8",
+  "Stage 8 of 8": "चरण 8 / 8"
 };
