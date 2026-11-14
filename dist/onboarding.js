@@ -361,7 +361,7 @@ const financeChecks=[
 {id:'bank',name:'Bank account verification',document:'d_bank'},
 {id:'pan',name:'PAN verification',document:'d_tax'},
 {id:'aadhaar',name:'Aadhaar verification',document:'d_identity'}];
-const financeCleared=run=>!!run&&(run.output.checks||[]).length>0&&(run.output.checks||[]).every(c=>((run.output.checkStates||{})[c.id]||{}).state==='Verified');
+const financeCleared=run=>!!run&&(run.state==='Released'||((run.output.checks||[]).length>0&&(run.output.checks||[]).every(c=>((run.output.checkStates||{})[c.id]||{}).state==='Verified')));
 
 /* Logistics workflow: only has work to do when relocation was asked for. */
 function logistics(record){
@@ -436,6 +436,11 @@ if(!record.items)record.items={};
 if(!record.history)record.history=[];
 if(record.screening===undefined)record.screening=true;
 if(record.acceptance===undefined)record.acceptance=null;
+/* A finance run drafted before the checks existed gets them now, so the
+   compensation is not locked behind a board with nothing on it. */
+if(record.workflows&&record.workflows.finance&&record.workflows.finance.output&&!record.workflows.finance.output.checks){
+record.workflows.finance.output.checks=financeChecks;
+record.workflows.finance.output.checkStates=record.workflows.finance.output.checkStates||{}}
 if(!record.portalToken)record.portalToken=(globalThis.crypto&&crypto.randomUUID?crypto.randomUUID().slice(0,8):String(Math.random()).slice(2,10));
 return record}
 
