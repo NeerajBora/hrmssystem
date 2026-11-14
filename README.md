@@ -7,6 +7,7 @@ Requires Node.js (modern version with fetch support).
 
 - Static UI preview: `python3 -m http.server 4173 --directory dist` (AI endpoint requires the Worker).
 - Build the deployable Worker: `node scripts/build-ai.mjs`.
+- Run the Worker locally, with the assistant live: `node scripts/build-ai.mjs && node scripts/dev-server.mjs`, then open `http://localhost:8787`. Put `GEMINI_API_KEY` in `.dev.vars`, which is gitignored. The development host supplies the identity header that the hosting platform adds in a real deployment; it is a development tool, not an authentication layer, and it is not deployed.
 - Tests: `node --test tests/*.test.*`.
 - Deploy `dist/server/index.js` to a compatible Cloudflare Worker environment. The Worker embeds the UI assets. Sites hosting identity and access integration is required for the assistant endpoint; hosting elsewhere needs an equivalent trusted authentication layer.
 - Configure `GEMINI_API_KEY` as a server secret and optionally `GEMINI_MODEL` (default `gemini-3.1-flash-lite`). OpenAI is a fallback only when Gemini is not configured. Never put keys in browser code. See `.env.example` for variable names.
