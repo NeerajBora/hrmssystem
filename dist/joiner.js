@@ -18,6 +18,12 @@ const pairs=rows=>`<dl class="self-pairs">${rows.filter(([,v])=>v).map(([k,v])=>
 
 function log(record,action){record.history.unshift({date:stamp(),action,by:record.name})}
 
+function sendNotice(record,kind){
+const notice=model().composeNotice(record,kind);
+(record.notices||(record.notices=[])).unshift(Object.assign({sentOn:stamp(),to:record.email||'the joiner'},notice));
+log(record,'Email sent: '+notice.subject)}
+global.joinerNotice=sendNotice;
+
 function persist(record,action,undo){
 try{state.audit.push({date:stamp(),actor:record.name,action});save()}
 catch(e){undo();state.audit.pop();toast('Unable to save. Browser storage may be full.');return false}
@@ -57,7 +63,10 @@ return `<main class="joiner">
 ${offerCard(r)}
 ${confirmCard(r,proposal)}
 ${documentCard(r,tasks)}
+${submitCard(r)}
+${readyCard(r)}
 ${progressCard(r)}
+${noticeCard(r)}
 
 <p class="joiner-foot">Fictional demonstration data. Uploads are recorded by file name only; no file content is stored or sent anywhere. This page has no sign-in and is not an authentication layer.</p>
 </main>`};
@@ -69,16 +78,22 @@ if(r.acceptance==='No')return `<section class="joiner-card"><h2>Offer declined</
 return `<section class="joiner-card">
 <h2>Your offer</h2>
 ${pairs([['Designation',r.designation],['Grade',r.grade],['Department',r.dept],['Work location',r.location],['Employment type',r.employmentType],['Proposed joining date',r.joiningDate],['Offer reference',r.offerRef],['Offer date',r.offerDate]])}
-<p class="joiner-note">Accepting confirms that you intend to join. Your document checklist opens straight afterwards.</p>
+<h3>Terms and conditions</h3>
+<ol class="joiner-terms">${model().offerTerms.map(t=>`<li>${esc(t)}</li>`).join('')}</ol>
+<label class="joiner-agree"><input type="checkbox" id="joinerTerms" onchange="joinerTermsToggle()"><span>I have read and accept these terms and confirm I intend to join.</span></label>
 <div class="joiner-actions">
-<button class="primary" onclick="joinerAccept('${r.portalToken}')">Accept the offer</button>
+<button class="primary" id="joinerAcceptBtn" disabled onclick="joinerAccept('${r.portalToken}')">Accept the offer</button>
 <button onclick="joinerDecline('${r.portalToken}')">Decline</button>
 </div></section>`}
 
+global.joinerTermsToggle=function(){const box=$('#joinerAcceptBtn');if(box)box.disabled=!$('#joinerTerms')?.checked};
+
 global.joinerAccept=function(token){const r=caseByToken(token);if(!r||r.acceptance!==null)return;
+if(!$('#joinerTerms')?.checked)return toast('Accept the terms first.');
 const previous=structuredClone(state.onboarding);
-r.acceptance='Yes';r.stage=Math.max(r.stage,2);
-log(r,'Offer accepted by the joiner in the joining portal');
+r.acceptance='Yes';r.stage=Math.max(r.stage,2);r.termsAcceptedOn=stamp();
+log(r,'Terms and conditions accepted, offer accepted in the joining portal');
+sendNotice(r,'documents');
 if(!persist(r,'Offer accepted by '+r.name,()=>{state.onboarding=previous}))return;
 refresh();toast('Offer accepted. Your documents are next.')};
 
@@ -206,6 +221,57 @@ const entry=r.items[itemId]||(r.items[itemId]={state:'Pending'});
 log(r,'Replied to HR on '+item.name);
 if(!persist(r,'Joiner replied on '+item.name,()=>{state.onboarding=previous}))return;
 $('#dialog').close();refresh();toast('Reply sent.')};
+
+/* ---------- submit everything ---------- */
+function submitCard(r){
+if(r.acceptance!=='Yes')return '';
+const m=model();
+if(r.submittedOn)return `<section class="joiner-card"><h2>Submitted</h2><p class="joiner-note">You sent everything on ${esc(r.submittedOn)}. Finance, logistics and HR record setup have started. Nothing else is needed from you for now.</p></section>`;
+if(!m.joinerComplete(r))return '';
+return `<section class="joiner-card joiner-submit">
+<h2>Send everything to HR</h2>
+<p class="joiner-note">Your joining date is settled and every document on your list has been sent. Submitting starts the finance, relocation and HR record setup.</p>
+<div class="joiner-actions"><button class="primary" onclick="joinerSubmitAll('${r.portalToken}')">Submit my onboarding</button></div>
+</section>`}
+
+global.joinerSubmitAll=function(token){const r=caseByToken(token);if(!r)return;
+const m=model();
+if(r.submittedOn||!m.joinerComplete(r))return toast('Finish your documents and joining date first.');
+const previous=structuredClone(state.onboarding);
+r.submittedOn=stamp();
+m.runWorkflows(r,{emails:(state.onboarding||[]).map(c=>c.companyEmail).filter(Boolean),
+ids:people.map(p=>p.id).concat((state.onboarding||[]).map(c=>c.employeeId).filter(Boolean)),
+stamp:stamp()});
+log(r,'Onboarding submitted by the joiner. Finance, logistics and HR record workflows started.');
+for(const run of m.workflowStates(r))log(r,run.name+' · '+run.state+' by the onboarding agent');
+sendNotice(r,'submitted');
+if(!persist(r,'Onboarding submitted by '+r.name,()=>{state.onboarding=previous}))return;
+refresh();toast('Submitted. Your setup has started.')};
+
+/* ---------- access released ---------- */
+function readyCard(r){
+if(!r.accessReleasedOn)return '';
+return `<section class="joiner-card joiner-ready">
+<h2>Your HRMS access is ready</h2>
+${pairs([['Employee ID',r.employeeId],['Work email',r.companyEmail],['Joining date',r.joiningDate],['Joining location',r.location],['Reporting to',r.manager]])}
+<p class="joiner-note">Sign in to the HRMS portal with your employee ID to see your joining details and first-week guidance.</p>
+<div class="joiner-actions"><button class="primary" onclick="joinerSignIn('${r.portalToken}')">Open my HRMS portal</button></div>
+</section>`}
+
+global.joinerSignIn=function(token){const r=caseByToken(token);if(!r||!r.accessReleasedOn)return;
+signedOut=false;role='Employee';newJoiner=r.employeeId;
+try{sessionStorage.setItem('samanvay-demo-role','Employee');sessionStorage.setItem('samanvay-new-joiner',r.employeeId)}catch{}
+history.pushState(null,'',location.pathname+location.search);
+page='Home';render();window.scrollTo(0,0)};
+
+/* ---------- what NRL sent ---------- */
+function noticeCard(r){
+if(!r.notices||!r.notices.length)return '';
+return `<section class="joiner-card">
+<h2>Messages from NRL</h2>
+<ul class="joiner-mail">${r.notices.map(n=>`<li><strong>${esc(n.subject)}</strong><small>${esc(n.sentOn)} · to ${esc(n.to)}</small><p data-i18n-user>${esc(n.body)}</p></li>`).join('')}</ul>
+<p class="joiner-note">Demonstration messages. Nothing is sent to a real mailbox.</p>
+</section>`}
 
 /* ---------- what HR is doing ---------- */
 function progressCard(r){

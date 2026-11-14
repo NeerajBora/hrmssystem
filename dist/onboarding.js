@@ -263,6 +263,112 @@ return {ok:true}}
 function joinerAwaitingAnswer(record){return record.stage>=2&&proposalOf(record).state==='Awaiting joiner'}
 function joinerOutstanding(record){return joinerTasks(record).filter(i=>!['Verified','Waived','Submitted'].includes(itemState(record,i.id))||itemState(record,i.id)==='Failed')}
 
+/* ---------------------------------------------------------------------------
+   What the candidate is sent, what they accept, and the three workflows that
+   run once they submit. Pay bands, allowances and the mail text are
+   illustrative demonstration values, not NRL terms.
+--------------------------------------------------------------------------- */
+const offerTerms=[
+'The appointment is subject to medical fitness, document verification and any statutory clearance that applies to the post.',
+'Pay, allowances and benefits follow the pay band of the grade offered and the rules in force at the time of payment.',
+'The joining date is the date agreed in writing with HR. Reporting later than that date needs written approval.',
+'Company property, access cards and systems are issued for official use and returned when service ends.',
+'Confidentiality, intellectual-property and conduct rules apply from the joining date.'];
+
+const payBands={
+E1:{band:'E1',basic:62000,hra:0.24,da:0.46},
+E2:{band:'E2',basic:74000,hra:0.24,da:0.46},
+E3:{band:'E3',basic:88000,hra:0.27,da:0.46},
+NE3:{band:'NE3',basic:38000,hra:0.2,da:0.46},
+NE4:{band:'NE4',basic:43000,hra:0.2,da:0.46},
+A1:{band:'A1',basic:19000,hra:0.16,da:0.3}};
+const defaultBand={band:'Unbanded',basic:45000,hra:0.2,da:0.4};
+const rupees=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+
+/* Finance workflow: the compensation the HR compensation portal would carry. */
+function compensation(record){
+const band=payBands[(record.grade||'').toUpperCase()]||defaultBand;
+const agency=employmentOf(record)==='Agency contract';
+const basic=band.basic;
+const da=Math.round(basic*band.da);
+const hra=Math.round(basic*band.hra);
+const pattern=templateFor(record);
+const shiftAllowance=pattern.shift==='Rotating'?3200:pattern.shift==='Field duty'?4200:0;
+const conveyance=agency?0:2400;
+const gross=basic+da+hra+shiftAllowance+conveyance;
+const pf=agency?0:Math.round(basic*0.12);
+const gratuity=agency?0:Math.round(basic*0.0481);
+return {band:band.band,
+basic,dearness:da,houseRent:hra,shiftAllowance,conveyance,
+gross,employerPf:pf,gratuity,
+annual:(gross+pf+gratuity)*12,
+payrollGroup:agency?'Agency billing, not PSU payroll':categoryOf(record)+' payroll, monthly',
+note:agency?'Agency contract: billed through the agency, no PSU pay structure applies.':'Illustrative band values for the demonstration, not NRL pay rules.',
+lines:[['Basic pay',basic],['Dearness allowance',da],['House rent allowance',hra]]
+.concat(shiftAllowance?[['Shift allowance',shiftAllowance]]:[])
+.concat(conveyance?[['Conveyance',conveyance]]:[])}}
+
+/* Logistics workflow: only has work to do when relocation was asked for. */
+function logistics(record){
+if(!record.relocating)return {needed:false,tasks:[]};
+const to=record.location||'the work location';
+return {needed:true,tasks:[
+{id:'travel',name:'Travel to '+to,detail:'Book travel for the joiner and dependants to reach '+to+' before the joining date.'},
+{id:'accommodation',name:'Transit accommodation',detail:'Hold guest house or transit accommodation from the joining date for up to 30 days.'},
+{id:'goods',name:'Household goods movement',detail:'Arrange packing and movement of household goods against the entitlement for the grade.'},
+{id:'local',name:'Local transport and reporting',detail:'Arrange local transport for the reporting day and share the gate and reporting point.'}]}}
+
+/* Company address, never clashing with one already issued. */
+function companyEmail(record,taken){
+const parts=String(record.name||'').toLowerCase().normalize('NFKD').replace(/[^a-z\s]/g,'').trim().split(/\s+/).filter(Boolean);
+const base=(parts.slice(0,2).join('.')||'employee');
+let address=base+'@nrl.example.invalid',n=1;
+const used=new Set((taken||[]).map(a=>String(a).toLowerCase()));
+while(used.has(address.toLowerCase())){n++;address=base+n+'@nrl.example.invalid'}
+return address}
+
+const workflowNames={finance:'Finance · compensation setup',logistics:'Logistics · relocation',hr:'HR · employee record'};
+
+/* The joiner has sent everything that is theirs to send. */
+function joinerComplete(record){
+const tasks=joinerTasks(record);
+if(!tasks.length)return false;
+if(proposalOf(record).state==='Not asked'||proposalOf(record).state==='Awaiting joiner')return false;
+return tasks.every(i=>['Submitted','Verified','Waived'].includes(itemState(record,i.id)))}
+
+/* Mail the demonstration shows in place of a real message. */
+function composeNotice(record,kind){
+const name=(record.name||'').split(' ')[0]||'there';
+if(kind==='offer')return {kind,subject:'Your offer from NRL',
+body:'Dear '+name+', your offer for '+(record.designation||'the role')+' is attached in the joining portal. Please read the terms, accept or decline the offer, and confirm. The document checklist opens once you accept.'};
+if(kind==='documents')return {kind,subject:'Your onboarding checklist is open',
+body:'Dear '+name+', thank you for accepting. Please complete your profile in the joining portal: identity, education, bank, tax and statutory details, your joining date and whether you need relocation support.'};
+if(kind==='submitted')return {kind,subject:'We have received your documents',
+body:'Dear '+name+', your documents are with HR. Finance, logistics and HR record setup have started. We will write again when your HRMS access is ready.'};
+if(kind==='ready')return {kind,subject:'Your NRL HRMS access is ready',
+body:'Dear '+name+', your employee record is live. Employee ID '+(record.employeeId||'')+', work email '+(record.companyEmail||'')+'. Sign in to the HRMS portal with your employee ID to see your joining date, joining location and your first-week guidance.'};
+return {kind,subject:'Update on your onboarding',body:'Dear '+name+', there is an update on your onboarding.'}}
+
+/* The three workflows the submission triggers. Each produces a draft for HR
+   to release; nothing is paid, booked or activated by the run itself. */
+function runWorkflows(record,context){
+const taken=(context&&context.emails)||[];
+const ids=(context&&context.ids)||[];
+const stamp=(context&&context.stamp)||'';
+if(!record.employeeId)record.employeeId=nextEmployeeId(record,ids);
+if(!record.companyEmail)record.companyEmail=companyEmail(record,taken);
+const runs=record.workflows||(record.workflows={});
+runs.finance=runs.finance||{state:'Drafted',ranOn:stamp,output:compensation(record)};
+const plan=logistics(record);
+runs.logistics=runs.logistics||{state:plan.needed?'Drafted':'Not required',ranOn:stamp,output:plan};
+runs.hr=runs.hr||{state:'Drafted',ranOn:stamp,output:Object.assign(draftProfile(record),{companyEmail:record.companyEmail})};
+return runs}
+
+const workflowStates=record=>Object.entries(record.workflows||{}).map(([id,run])=>({id,name:workflowNames[id],state:run.state}));
+const workflowsSettled=record=>{const runs=record.workflows;if(!runs)return false;
+return Object.values(runs).every(run=>['Released','Not required'].includes(run.state))};
+const accessReleased=record=>!!record.accessReleasedOn;
+
 function ensureRecord(record){
 if(!record.stage)record.stage=1;
 /* Cases stored before the joining confirmation existed settled it off-system. */
@@ -350,7 +456,7 @@ sample(12,{name:'Nabanita Devi',designation:'Procurement Officer',dept:'Material
 {c_security:{state:'Verified',note:'Security clearance received from the competent authority'}},
 [['30/10/2026, 4:40 pm','All documents and checks verified. Awaiting the joiner confirmation.'],['30/10/2026, 9:30 am','Stage advanced to Pre-joining in progress'],['28/10/2026, 2:10 pm','Offer accepted. Joining date confirmed.'],['22/10/2026, 10:12 am','Offer issued. Offer email sent to the joiner with one link.']])]}
 
-const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
+const model={stages,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -540,6 +646,45 @@ if(p.proposed.length)rows.push(['Suggested by the joiner',p.proposed.join(' · '
 if(p.note)rows.push(['Joiner note',p.note]);
 return `<h3>Joining confirmation</h3>${profilePairs(rows)}`}
 
+/* The three workflows the joiner's submission started. */
+function workflowPanel(r){
+if(!r.workflows)return '';
+const runs=workflowStates(r);
+const rows=runs.map(run=>`<li><span><strong>${esc(run.name)}</strong><small>${esc(run.state)}</small></span>${run.state==='Drafted'?btn('Review',`onboardingWorkflow('${r.id}','${run.id}')`,'link'):chip(run.state,run.state==='Released'?'ok':'info')}</li>`).join('');
+return `<h3>Workflows started on submission</h3>
+${profilePairs([['Submitted by the joiner',r.submittedOn||'Not submitted'],['Employee ID',r.employeeId||'Not issued'],['Work email',r.companyEmail||'Not issued']])}
+<ul class="onb-runs">${rows}</ul>
+${workflowsSettled(r)&&!r.accessReleasedOn?`<div class="toolbar onb-actions">${btn('Release HRMS access',`onboardingRelease('${r.id}')`,'primary')}</div>`:''}
+${r.accessReleasedOn?`<p class="onb-released">HRMS access released on ${esc(r.accessReleasedOn)}. The joiner can sign in with ${esc(r.employeeId)}.</p>`:''}`}
+
+global.onboardingWorkflow=function(id,runId){if(!permitted())return;const r=find(id);if(!r||!r.workflows||!r.workflows[runId])return;
+const run=r.workflows[runId],out=run.output;
+let body='';
+if(runId==='finance')body=`${profilePairs([['Pay band',out.band],['Payroll group',out.payrollGroup]].concat(out.lines.map(([k,v])=>[k,rupees(v)])).concat([['Monthly gross',rupees(out.gross)],['Employer PF',rupees(out.employerPf)],['Gratuity accrual',rupees(out.gratuity)],['Annual cost to company',rupees(out.annual)]]))}<div class="callout">${esc(out.note)} Releasing records this compensation against the employee record in this browser. No payroll system is written.</div>`;
+else if(runId==='logistics')body=out.needed?`<ul class="onb-runs">${out.tasks.map(t=>`<li><span><strong>${esc(t.name)}</strong><small>${esc(t.detail)}</small></span></li>`).join('')}</ul><div class="callout">Nothing is booked by the demonstration. Releasing records that the relocation plan is handed to administration.</div>`:'<div class="callout">The joiner answered that relocation is not needed, so this workflow has nothing to do.</div>';
+else body=`${profilePairs([['Employee ID',r.employeeId],['Work email',r.companyEmail],['Template',out.templateName],['Working pattern',out.shift],['Work hours',out.workHours],['Weekly off',out.weeklyOff],['Probation ends',out.probationEnd||'Not applicable'],['Leave entitlement',out.leaveEntitlement],['Access',out.access.join(', ')]])}<div class="callout">Releasing creates the employee profile in People &amp; Service Records.</div>`;
+modal(workflowNames[runId],body,btn('Close',`onboardingDetail('${id}')`)+(run.state==='Drafted'?btn('Release',`onboardingReleaseRun('${id}','${runId}')`,'primary'):''))};
+
+global.onboardingReleaseRun=function(id,runId){if(!permitted())return;const r=find(id);if(!r||!r.workflows||!r.workflows[runId])return;
+const previous=structuredClone(state.onboarding),previousProfiles=structuredClone(state.hrmsProfiles||[]);
+const run=r.workflows[runId];
+run.state='Released';run.releasedOn=now();run.releasedBy=person().name;
+if(runId==='hr'&&!r.profile){const draft=Object.assign({},run.output,{createdOn:now(),createdBy:person().name,case:r.id,companyEmail:r.companyEmail});
+r.profile=draft;state.hrmsProfiles=[...(state.hrmsProfiles||[]),draft];if(typeof syncPeople==='function')syncPeople()}
+if(runId==='finance')r.compensation=run.output;
+log(r,workflowNames[runId]+' released by HR');
+if(!persist('Workflow released for '+r.name+': '+workflowNames[runId],()=>{state.onboarding=previous;state.hrmsProfiles=previousProfiles}))return;
+render();onboardingDetail(id);toast(workflowNames[runId]+' released.')};
+
+global.onboardingRelease=function(id){if(!permitted())return;const r=find(id);if(!r||!workflowsSettled(r)||r.accessReleasedOn)return;
+const previous=structuredClone(state.onboarding);
+r.accessReleasedOn=now();
+const notice=composeNotice(r,'ready');
+(r.notices||(r.notices=[])).unshift(Object.assign({sentOn:now(),to:r.email||'the joiner'},notice));
+log(r,'HRMS access released. Email sent: '+notice.subject);
+if(!persist('HRMS access released for '+r.name,()=>{state.onboarding=previous}))return;
+render();onboardingDetail(id);toast('HRMS access released. The joiner can sign in.')};
+
 /* The employee identifier and the profile, once they exist. */
 function profilePanel(r){
 if(r.stage<4||r.acceptance==='No'||(!r.employeeId&&!r.profile))return '';
@@ -566,6 +711,7 @@ ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The c
 <ol class="onb-track">${track}</ol>
 <div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}</div>
 ${confirmPanel(r)}
+${workflowPanel(r)}
 ${profilePanel(r)}`,
 checklist:`<h3>Checklist · <span data-i18n-user>${esc(r.name)}</span></h3>${groupBlocks}`,
 info:`<h3>Employee information · <span data-i18n-user>${esc(r.name)}</span></h3>${info}`,

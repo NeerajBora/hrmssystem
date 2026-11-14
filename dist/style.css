@@ -205,3 +205,31 @@ transition:background .15s ease,border-color .15s ease}
 .joiner .self-pairs{grid-template-columns:1fr 1fr}
 .joiner-actions button{min-width:0;flex:1}
 .joiner-exit{min-height:38px;padding:0 12px;font-size:11px}}
+
+/* Joining portal: terms, submission, mail and the new joiner's first days. */
+.joiner-terms{margin:12px 0 0;padding-left:20px;font-size:12.5px;line-height:1.75;color:#5b6778}
+.joiner-terms li{margin-bottom:8px}
+.joiner-agree{display:flex;align-items:flex-start;gap:11px;margin-top:18px;padding:14px 16px;border:1px solid var(--line);border-radius:9px;font-size:13px;line-height:1.5;cursor:pointer}
+.joiner-agree input{width:18px;height:18px;margin-top:1px}
+.joiner-submit{border-top:4px solid #1f7a4d}
+.joiner-ready{border-top:4px solid #ffda00;background:linear-gradient(120deg,#f3f8f4,#fff)}
+.joiner-mail{list-style:none;margin:16px 0 0;padding:0}
+.joiner-mail li{padding:14px 0;border-top:1px solid var(--line)}
+.joiner-mail strong{display:block;font-size:13.5px;color:#132a54}
+.joiner-mail small{display:block;margin:4px 0 8px;font-size:11px;color:var(--muted)}
+.joiner-mail p{margin:0;font-size:12.5px;line-height:1.65;color:#5b6778}
+.onb-runs{list-style:none;margin:14px 0 0;padding:0}
+.onb-runs li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 0;border-top:1px solid var(--line)}
+.onb-runs strong{display:block;font-size:12.5px;color:#1d2e4b}
+.onb-runs small{display:block;margin-top:3px;font-size:11px;color:var(--muted)}
+.onb-released{margin:14px 0 0;font-size:11.5px;color:#39714c}
+.joiner-welcome{border-top:4px solid #ffda00}
+.joiner-welcome-body{padding:22px 24px}
+.joiner-welcome .badge{font-size:11px;padding:6px 12px}
+.ask-welcome{position:fixed;right:26px;bottom:26px;width:330px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;box-shadow:0 18px 50px #16203030;z-index:60}
+.ask-welcome strong{display:block;font:800 16px Manrope;color:#132a54;margin-bottom:8px}
+.ask-welcome p{margin:0;font-size:12.5px;line-height:1.65;color:#5b6778}
+.ask-welcome-actions{display:flex;gap:10px;margin-top:16px}
+.ask-welcome-actions button{flex:1;min-height:40px;border-radius:8px;font-size:12.5px;font-weight:700}
+.ask-welcome-close{position:absolute;top:10px;right:12px;border:0;background:none;font-size:18px;color:var(--muted);padding:4px 8px}
+@media(max-width:650px){.ask-welcome{right:14px;left:14px;width:auto;bottom:14px}}
