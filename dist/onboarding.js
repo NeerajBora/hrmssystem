@@ -37,7 +37,7 @@ return {name,row:i+(hasHeader?2:1),issue,fields}})}
 
 /* ---------------------------------------------------------------------------
    Onboarding process model: one case, one checklist, one chain.
-   Eight stages from offer issued to onboarding complete. A person approves
+   Seven stages from offer issued to onboarding complete. A person approves
    every step; nothing advances, pays, or clears by itself.
 --------------------------------------------------------------------------- */
 const stages=[
@@ -45,10 +45,9 @@ const stages=[
 {n:2,id:'accepted',name:'Offer accepted',note:'Acceptance recorded and joining date confirmed. Portal link for documents released.'},
 {n:3,id:'prejoin',name:'Pre-joining in progress',note:'Joiner fills the profile and uploads documents. Verification runs document by document.'},
 {n:4,id:'ready',name:'Ready to join',note:'Readiness reviewed: documents, approvals, screening, equipment and joining confirmation.'},
-{n:5,id:'reported',name:'Reported for joining',note:'Joiner reported. Identity confirmed, originals checked, remaining signatures collected.'},
 {n:6,id:'active',name:'Active employee',note:'Safety training done, gate pass issued, employee record activated as the system of record.'},
 {n:7,id:'induction',name:'Induction and role onboarding',note:'Induction, buddy check, first-week schedule and unit training with expiry dates.'},
-{n:8,id:'complete',name:'Onboarding complete',note:'Training, benefit enrollment and permitted follow-ups closed, with owner and date.'}];
+{n:8,id:'complete',name:'Onboarding Completed',note:'Training, benefit enrollment and permitted follow-ups closed, with owner and date.'}];
 
 const checklist=[
 {id:'d_identity',name:'Identity proof',group:'Joiner documents',stage:3,kind:'document'},
@@ -78,7 +77,7 @@ const checklist=[
 {id:'s_confidentiality',name:'Confidentiality agreement',group:'Employment documents',stage:3,kind:'signature'},
 {id:'s_ip',name:'Intellectual-property terms',group:'Employment documents',stage:3,kind:'signature'},
 {id:'s_declarations',name:'Declarations',group:'Employment documents',stage:3,kind:'signature'},
-{id:'s_policy',name:'Policy acknowledgements',group:'Employment documents',stage:5,kind:'signature'},
+{id:'s_policy',name:'Policy acknowledgements',group:'Employment documents',stage:6,kind:'signature'},
 {id:'l_travel',name:'Travel arrangement',group:'Relocation and logistics',stage:4,kind:'task',when:'relocating'},
 {id:'l_accommodation',name:'Accommodation',group:'Relocation and logistics',stage:4,kind:'task',when:'relocating'},
 {id:'l_transport',name:'Transport',group:'Relocation and logistics',stage:4,kind:'task',when:'relocating'},
@@ -91,9 +90,9 @@ const checklist=[
 {id:'r_firstday',name:'First-day instructions issued',group:'Joining readiness',stage:4,kind:'task'},
 {id:'r_manager',name:'Manager role preparation',group:'Joining readiness',stage:4,kind:'task'},
 {id:'r_it',name:'IT access prepared',group:'Joining readiness',stage:4,kind:'task'},
-{id:'j_reported',name:'Joining time and date recorded',group:'Reporting day',stage:5,kind:'task'},
-{id:'j_identity',name:'Identity confirmed in person',group:'Reporting day',stage:5,kind:'task'},
-{id:'j_originals',name:'Original documents checked',group:'Reporting day',stage:5,kind:'task'},
+{id:'j_reported',name:'Joining time and date recorded',group:'Reporting day',stage:6,kind:'task'},
+{id:'j_identity',name:'Identity confirmed in person',group:'Reporting day',stage:6,kind:'task'},
+{id:'j_originals',name:'Original documents checked',group:'Reporting day',stage:6,kind:'task'},
 {id:'a_safety',name:'One-day safety training completed',group:'Activation',stage:6,kind:'task',hard:true},
 {id:'a_gate',name:'Saral Pravesh smart card gate pass issued',group:'Activation',stage:6,kind:'task',hard:true},
 {id:'a_sap',name:'Employee record activated in SAP',group:'Activation',stage:6,kind:'task',hard:true},
@@ -123,7 +122,7 @@ const failed=due.filter(i=>itemState(record,i.id)==='Failed');
 const open=due.filter(i=>!closed(itemState(record,i.id))&&!i.optional);
 const hardOpen=open.filter(i=>i.hard);
 const done=items.filter(i=>closed(itemState(record,i.id))).length;
-const status=record.acceptance==='No'?'Stopped':record.stage===1&&record.acceptance!=='Yes'?'Awaiting acceptance':record.stage>=8&&!open.length?'Complete':failed.length||hardOpen.length?'Blocked':!open.length?'Ready':record.stage>=6?'Pending follow-up':'In progress';
+const status=record.acceptance==='No'?'Stopped':record.stage===1&&record.acceptance!=='Yes'?'Awaiting acceptance':record.stage>=8&&record.inductionCompletedOn&&record.roleOnboardingCompletedOn&&!failed.length?'Complete':record.stage>=8&&!open.length?'Complete':failed.length||(hardOpen.length&&!record.firstHrmsLoginOn)?'Blocked':!open.length?'Ready':record.stage>=6?'Pending follow-up':'In progress';
 const note=record.items&&failed.length?(record.items[failed[0].id]||{}).note:'';
 return {status,failed,open,hardOpen,due,items,done,total:items.length,
 percent:items.length?Math.round(done/items.length*100):0,
@@ -131,6 +130,7 @@ missing:open.map(i=>i.name),
 reason:record.acceptance==='No'?'The joiner declined the offer':record.stage===1&&record.acceptance!=='Yes'?'Offer acceptance not recorded yet':failed.length?failed[0].name+' failed: '+(note||'reason not recorded'):hardOpen.length?hardOpen[0].name+' is a hard block and is not cleared':open.length?open.length+' item(s) outstanding':''}}
 
 function canAdvance(record){
+if(record.stage>=4&&record.stage<8)return {ok:false,reason:record.firstHrmsLoginOn?'The employee completes induction and role onboarding in their HRMS Home.':'Waiting for all setup workflows and the employee’s first HRMS login.'};
 if(record.stage>=8)return {ok:false,reason:'This case is already complete.'};
 if(record.acceptance==='No')return {ok:false,reason:'The joiner declined the offer. The case is stopped.'};
 if(record.stage===1)return record.acceptance==='Yes'?{ok:true}:{ok:false,reason:'Record the offer acceptance before onboarding starts.'};
@@ -420,11 +420,12 @@ runs.hr=runs.hr||{state:'Drafted',ranOn:stamp,output:Object.assign(draftProfile(
 return runs}
 
 const workflowStates=record=>Object.entries(record.workflows||{}).map(([id,run])=>({id,name:workflowNames[id],state:run.state}));
-const workflowsSettled=record=>{const runs=record.workflows;if(!runs)return false;
+const workflowsSettled=record=>{const runs=record.workflows;if(!runs||!['finance','logistics','hr'].every(id=>runs[id]))return false;
 return Object.values(runs).every(run=>['Released','Not required'].includes(run.state))};
 const accessReleased=record=>!!record.accessReleasedOn;
 
 function ensureRecord(record){
+if(record.stage===5)record.stage=record.firstHrmsLoginOn?6:4;
 if(!record.stage)record.stage=1;
 /* Cases stored before the joining confirmation existed settled it off-system. */
 if(record.stage>=4&&!record.joiningProposal){
@@ -532,7 +533,14 @@ rationale:pattern.rationale||'',
 model:pattern.model||''});
 return merged}
 
-const model={stages,financeChecks,financeCleared,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,applyPattern,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
+function firstHrmsAccess(record,stamp){
+if(!record.accessReleasedOn||!workflowsSettled(record)||record.acceptance==='No'||summary(record).failed.length)return {ok:false,reason:'Finance, Logistics and HR setup must be complete and no checks may have failed.'};
+if(record.firstHrmsLoginOn)return {ok:true,changed:false};
+record.firstHrmsLoginOn=stamp;if(record.stage>=8)return {ok:true,changed:true};record.stage=6;record.inductionStartedOn=stamp;record.history??=[];record.history.unshift({date:stamp,by:record.name,action:'First HRMS login: employee activated; induction and role onboarding started.'});return {ok:true,changed:true}}
+function finishOrientation(record,task,stamp){
+if(!['induction','role'].includes(task)||!record.firstHrmsLoginOn||!record.accessReleasedOn||!workflowsSettled(record)||summary(record).failed.length)return {ok:false};
+const key=task==='induction'?'inductionCompletedOn':'roleOnboardingCompletedOn';if(record[key])return {ok:true,changed:false};record[key]=stamp;record.stage=record.inductionCompletedOn&&record.roleOnboardingCompletedOn?8:7;record.history.unshift({date:stamp,by:record.name,action:task==='induction'?'Employee completed induction.':'Employee completed role onboarding.'});if(record.stage===8){record.onboardingCompletedOn=stamp;record.history.unshift({date:stamp,by:record.name,action:'Onboarding Completed: induction and role onboarding both completed.'})}return {ok:true,changed:true}}
+const model={firstHrmsAccess,finishOrientation,stages,financeChecks,financeCleared,checklist,groups,states,employmentTypes,proposalStates,applicable,itemState,summary,canAdvance,samples,applyPattern,proposalOf,askJoiner,joinerResponse,acceptProposedDate,joinerTasks,offerTerms,payBands,compensation,logistics,companyEmail,joinerComplete,composeNotice,workflowNames,rupees,runWorkflows,workflowStates,workflowsSettled,accessReleased,joinerCanSubmit,joinerAwaitingAnswer,joinerOutstanding,nextEmployeeId,draftProfile,workPattern,profileTemplates,matchTemplate,templateFor,parse};
 if(typeof module!=='undefined')module.exports=Object.assign({parse},model);
 if(!global.document)return;
 global.Onboarding=model;
@@ -562,7 +570,8 @@ const now=()=>new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'});
 const today=()=>new Date().toISOString().slice(0,10);
 const tone=s=>['Ready','Complete','Verified'].includes(s)?'ok':['Blocked','Failed','Stopped'].includes(s)?'bad':['Pending follow-up','Submitted','Waived','Awaiting acceptance'].includes(s)?'info':'warn';
 const chip=(text,cls)=>`<span class="badge ${cls}">${esc(text)}</span>`;
-const stageName=n=>(stages[n-1]||stages[0]).name;
+const stageName=n=>(stages.find(s=>s.n===n)||stages[0]).name;
+const stagePosition=n=>Math.max(1,stages.findIndex(s=>s.n===n)+1);
 const caseRef=id=>id.length<=16?id:id.slice(0,10);
 const records=()=>(state.onboarding||[]).map(ensure);
 const find=id=>records().find(r=>r.id===id);
@@ -604,10 +613,10 @@ const filtered=view==='Exceptions'?rows.filter(x=>['Blocked','Pending follow-up'
 const tabs=['Exceptions','Open','All'].map(v=>`<button class="${v===view?'primary':''}" onclick="onboardingView('${v}')">${v}</button>`).join('');
 return card('Employee onboarding',`
 <div class="onboard-intro"><div><span class="eyebrow">HR INTAKE</span><h3>From offer to active employee, in one chain.</h3><p>One onboarding case, one checklist. HR sees only exceptions by default. A person approves every step; nothing is paid, approved, or sent by the system alone.</p></div><div class="actions">${btn('Upload employee list',"onboardingUpload()",'primary')}</div></div>
-<div class="onboard-note">Cases start from an uploaded employee list. Eight stages: offer issued · offer accepted · pre-joining · ready to join · reported for joining · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
+<div class="onboard-note">Cases start from an uploaded employee list. Seven stages: offer issued · offer accepted · pre-joining · ready to join · active employee · induction · onboarding complete. Records are saved in this browser. Use sample names in this demo.</div>
 <div class="onb-metrics">${metrics.map(([label,value,note])=>`<div class="stat"><div class="stathead">${label}<span>→</span></div><strong>${value}</strong><small>${note}</small></div>`).join('')}</div>
 <div class="toolbar">${tabs}${btn('Export cases (CSV)',"onboardingExport()")}${btn('Auto-verify: '+(autoVerify()?'on':'off'),"onboardingAutoVerify()")}${all.some(r=>r.batch)?btn('Remove uploaded cases ('+all.filter(r=>r.batch).length+')',"onboardingRemoveUploaded()"):''}${all.some(r=>r.sample)?btn('Remove sample joiners ('+all.filter(r=>r.sample).length+')',"onboardingRemoveSamples()"):btn('Load sample joiners',"onboardingReseedConfirm()")}${btn('Download CSV template',"onboardingTemplate()")}</div>
-${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${r.stage}/8 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Upload an employee list, or load the sample joiners.'}</div>`}
+${filtered.length?`<div class="tablewrap"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th><th>STATUS</th><th>WHAT IS MISSING</th><th>OWNER</th><th></th></tr></thead><tbody>${filtered.map(({r,s})=>`<tr><td><strong data-i18n-user>${esc(r.name)}</strong><br><small>${esc(r.designation||'Designation not recorded')}</small></td><td>${esc(caseRef(r.id))}<br><small>${r.joiningDate?'Joining '+esc(r.joiningDate):'Joining date not set'}</small></td><td>${stagePosition(r.stage)}/7 · ${esc(stageName(r.stage))}</td><td>${chip(s.status,tone(s.status))}</td><td><small>${esc(s.reason||'Nothing outstanding')}</small></td><td><small data-i18n-user>${esc(r.coordinator||r.by||'Unassigned')}</small></td><td>${btn('Open →',`onboardingDetail('${r.id}','overview')`,'link')}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${all.length?'No cases in this view. Switch to All to see every case.':'No onboarding cases yet. Upload an employee list, or load the sample joiners.'}</div>`}
 <div class="cardfoot">${all.length} onboarding cases · ${rows.filter(x=>x.s.status==='Blocked').length} blocked · Every question, reply and upload is logged with date and owner.</div>`)};
 
 global.onboardingTemplate=function(){
@@ -625,7 +634,7 @@ const withProfile=uploaded.filter(r=>r.profile);
 const removable=uploaded.filter(r=>!r.profile);
 const started=removable.filter(r=>r.stage>1||r.acceptance);
 modal('Remove uploaded cases',`<p>This permanently removes ${removable.length} onboarding case(s) created from an uploaded employee list. This cannot be undone.</p>
-<div class="tablewrap" style="max-height:220px;overflow:auto"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th></tr></thead><tbody>${removable.map(r=>`<tr><td data-i18n-user>${esc(r.name)}</td><td>${esc(r.id)}</td><td>${r.stage}/8</td></tr>`).join('')}</tbody></table></div>
+<div class="tablewrap" style="max-height:220px;overflow:auto"><table><thead><tr><th>EMPLOYEE</th><th>CASE</th><th>STAGE</th></tr></thead><tbody>${removable.map(r=>`<tr><td data-i18n-user>${esc(r.name)}</td><td>${esc(r.id)}</td><td>${stagePosition(r.stage)}/7</td></tr>`).join('')}</tbody></table></div>
 ${started.length?`<div class="callout">${started.length} of these have moved past Offer issued. Their documents, answers and history go with them.</div>`:''}
 ${withProfile.length?`<div class="callout">${withProfile.length} uploaded case(s) already have an employee profile and are kept. Remove those from People &amp; Service Records if they should not exist.</div>`:''}
 <p class="sub">The sample joiners are not touched.</p>`,
@@ -674,7 +683,7 @@ if(!persist('Sample onboarding cases reloaded',()=>{state.onboarding=previous}))
 $('#dialog').close();render();toast('Sample joiners reloaded.')};
 
 global.onboardingExport=function(){if(!permitted())return;
-const rows=records().map(r=>{const s=summary(r);return [r.id,r.name,r.designation||'',r.employmentType||'',r.joiningDate||'',r.stage+'/8',stageName(r.stage),s.status,s.missing.join('; '),r.coordinator||'']});
+const rows=records().map(r=>{const s=summary(r);return [r.id,r.name,r.designation||'',r.employmentType||'',r.joiningDate||'',stagePosition(r.stage)+'/7',stageName(r.stage),s.status,s.missing.join('; '),r.coordinator||'']});
 download('onboarding-cases.csv',[['Case ID','Employee','Designation','Employment type','Joining date','Stage','Stage name','Status','Outstanding','Coordinator'],...rows].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n'))};
 
 /* ---------- new employee information ---------- */
@@ -747,10 +756,10 @@ $('#dialog').close();render();toast(existing?'Employee information saved.':'Onbo
 let caseView='overview';
 global.onboardingDetail=function(id,view){if(!permitted())return;const r=find(id);if(!r)return;
 if(view)caseView=view;
-const s=summary(r),adv=canAdvance(r),next=stages[r.stage];
+const s=summary(r),adv=canAdvance(r),next=stages.find(s=>s.n>r.stage);
 const tick='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
-const track=stages.map(st=>{const cls=r.stage>st.n?'done':r.stage===st.n?'current':'ahead';return `<li class="${cls}"><span>${cls==='done'?tick:st.n}</span><strong>${st.name}</strong></li>`}).join('');
-const info=profilePairs([['Case ID',caseRef(r.id)],['Status',s.status],['Stage',r.stage+' of 8 · '+stageName(r.stage)],
+const track=stages.map((st,index)=>{const cls=r.stage>st.n?'done':r.stage===st.n?'current':'ahead';return `<li class="${cls}"><span>${cls==='done'?tick:index+1}</span><strong>${st.name}</strong></li>`}).join('');
+const info=profilePairs([['Case ID',caseRef(r.id)],['Status',s.status],['Stage',stagePosition(r.stage)+' of 7 · '+stageName(r.stage)],
 ['Designation',r.designation||'Not recorded'],['Grade',r.grade||'Not recorded'],['Department',r.dept||'Not recorded'],
 ['Employment type',r.employmentType||'Not recorded'],['Work location',r.location||'Not recorded'],
 ['Offer reference',r.offerRef||'Not recorded'],['Offer date',r.offerDate||'Not recorded'],
@@ -999,7 +1008,7 @@ overview:`
 ${r.needsInfo?`<div class="callout">Employee information is incomplete for this case. ${btn('Add employee information',`onboardingNew('${r.id}')`,'link')}</div>`:''}
 ${r.acceptance===null?`<div class="callout">Waiting for the candidate to accept the offer and the terms in their joining portal. The joining date and relocation follow there, in the same place.</div>`:''}
 ${r.acceptance==='No'?'<div class="callout">The joiner declined the offer. The case is stopped and onboarding does not start.</div>':''}
-<div class="onb-stagenow"><span>Stage ${r.stage} of 8</span><strong>${esc(stageName(r.stage))}</strong></div>
+<div class="onb-stagenow"><span>Stage ${stagePosition(r.stage)} of 7</span><strong>${esc(stageName(r.stage))}</strong></div>
 <ol class="onb-track">${track}</ol>
 <div class="toolbar onb-actions">${stageAction}${confirmActions(r)}${r.acceptance!=='No'&&r.stage>1&&next?(adv.ok?btn('Advance to '+next.name,`onboardingAdvance('${r.id}')`,'primary'):`<button disabled title="${esc(adv.reason)}">Advance to ${esc(next.name)}</button>`):''}${btn('Edit information',`onboardingNew('${r.id}')`)}${r.acceptance==='No'?'':btn('Open the joiner portal',`onboardingPortal('${r.id}')`)}${r.acceptance==='Yes'&&r.stage>=3&&s.open.length?btn('Clear remaining checks (demo)',`onboardingClearChecks('${r.id}')`):''}</div>
 ${confirmPanel(r)}
@@ -1083,14 +1092,14 @@ $('#dialog').close();location.hash='#/joining/'+r.portalToken};
 global.onboardingAdvance=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const check=canAdvance(r);
 if(!check.ok)return toast(check.reason);
-const next=stages[r.stage];if(!next)return;
+const next=stages.find(s=>s.n>r.stage);if(!next)return;
 caseModal('Advance this case',`<p>Move <strong data-i18n-user>${esc(r.name)}</strong> from <strong>${esc(stageName(r.stage))}</strong> to <strong>${esc(next.name)}</strong>?</p><p class="sub">${esc(next.note)}</p><label class="field full">Note for the history (optional)<input id="onbAdvanceNote" maxlength="160"></label>`,
 btn('Cancel',`onboardingDetail('${id}')`)+btn('Confirm',`onboardingAdvanceConfirm('${id}')`,'primary'))};
 
 global.onboardingAdvanceConfirm=function(id){if(!permitted())return;const r=find(id);if(!r)return;
 const check=canAdvance(r);if(!check.ok)return toast(check.reason);
 const note=val('onbAdvanceNote'),previous=structuredClone(state.onboarding);
-r.stage=Math.min(8,r.stage+1);
+r.stage=(stages.find(s=>s.n>r.stage)||stages.at(-1)).n;
 log(r,'Stage advanced to '+stageName(r.stage)+(note?' · '+note:''));
 const reachedReady=r.stage===4;
 if(reachedReady&&!r.workflows){

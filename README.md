@@ -96,3 +96,7 @@ Apply for leave now has all 19 options shown in the supplied references, grouped
 Loss of Pay and Leave of Absence show unpaid/policy-based rules instead of a misleading zero balance. Shift options create a separate duty allowance request and do not deduct leave. Agency workers do not automatically receive PSU employee entitlements. All balances are fictional, browser-local examples, not NRL policy or statutory entitlements. Calendar-day counting and the existing configurable maximum-request length remain in use. All new interface text is included in the Hindi pack. Source reference photographs are not published.
 
 Run balance checks with `node --test tests/leave-model.test.cjs tests/i18n.test.cjs`.
+
+## Employee first login and orientation
+The workflow has seven visible stages; Reported for joining has been removed. Internal stage identifiers remain stable for existing records. Previously stored cases at the removed stage return to Ready to join unless first login is already recorded.
+Once Finance, Logistics and HR runs are Released (or Not required) and HRMS access is released, the employee's first kiosk sign-in or Open my HRMS portal action records Active employee and starts induction. Home displays Company induction and Role onboarding above the regular dashboard. Each has a review and completion acknowledgement; completing both automatically records Onboarding Completed. These demo acknowledgements do not grant safety certification. HR cannot manually advance past Ready to join to bypass the employee steps.

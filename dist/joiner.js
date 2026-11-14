@@ -37,7 +37,7 @@ const record=caseByToken(token);
 if(!record)return `<main class="joiner"><section class="joiner-card"><h1>This joining link is not recognised</h1><p class="joiner-note">Ask your onboarding coordinator for a new link.</p><div class="joiner-actions"><button onclick="joinerExit()">Back to the HRMS demo</button></div></section></main>`;
 const r=record;r.items=r.items||{};r.history=r.history||[];
 const m=model(),proposal=m.proposalOf(r),tasks=m.joinerTasks(r);
-const stage=m.stages[r.stage-1];
+const stage=m.stages.find(s=>s.n===r.stage)||m.stages[3];
 const outstanding=tasks.filter(i=>['Pending','Failed'].includes(m.itemState(r,i.id))).length;
 /* After submitting, there is nothing for the joiner to do: the page becomes
    what NRL has told them, until access is released. */
@@ -62,7 +62,7 @@ return `<main class="joiner">
 <span class="eyebrow">YOUR ONBOARDING</span>
 <h1 data-i18n-user>${esc(r.name)}</h1>
 <p class="joiner-role" data-i18n-user>${esc(r.designation||'Role to be confirmed')}${r.dept?' · '+esc(r.dept):''}</p>
-<div class="joiner-status">${chip(stage.name,r.acceptance==='No'?'bad':'info')}<span>Step ${r.stage} of 8</span></div>
+<div class="joiner-status">${chip(stage.name,r.acceptance==='No'?'bad':'info')}<span>Step ${Math.max(1,m.stages.findIndex(s=>s.n===r.stage)+1)} of ${m.stages.length}</span></div>
 <p class="joiner-waiting">${esc(waiting)}</p>
 </section>
 
@@ -275,7 +275,7 @@ ${pairs([['Employee ID',r.employeeId],['Work email',r.companyEmail],['Joining da
 </section>`}
 
 global.joinerSignIn=function(token){const r=caseByToken(token);if(!r||!r.accessReleasedOn)return;
-signedOut=false;role='Employee';newJoiner=r.employeeId;
+if(!activateJoinerOnLogin(r))return;signedOut=false;role='Employee';newJoiner=r.employeeId;
 try{sessionStorage.setItem('samanvay-demo-role','Employee');sessionStorage.setItem('samanvay-new-joiner',r.employeeId)}catch{}
 history.pushState(null,'',location.pathname+location.search);
 page='Home';render();window.scrollTo(0,0)};

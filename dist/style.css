@@ -36,7 +36,7 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onboard-intro .actions{display:flex;gap:10px;flex-wrap:wrap}
 .onb-metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;padding:20px 24px 4px}
 .onb-metrics .stat strong{font-size:24px}
-.onb-track{list-style:none;display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:18px 0 10px;padding:0}
+.onb-track{list-style:none;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:18px 0 10px;padding:0}
 .onb-track li{position:relative;padding-top:24px;font-size:10px;line-height:1.35;color:var(--muted)}
 .onb-track li::before{content:'';position:absolute;top:9px;left:0;right:0;height:2px;background:#e3e7ee}
 .onb-track li.done::before,.onb-track li.current::before{background:#ffda00}
@@ -98,7 +98,7 @@ html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"
 .onb-stagenow{display:flex;align-items:baseline;gap:12px;margin:22px 0 4px;flex-wrap:wrap}
 .onb-stagenow span{font:700 10px 'DM Sans';letter-spacing:1.4px;text-transform:uppercase;color:#8794a8}
 .onb-stagenow strong{font:800 21px Manrope;letter-spacing:-.5px;color:#132a54}
-.onb-dialog .onb-track{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:0;margin:26px 0 24px;padding:0;list-style:none}
+.onb-dialog .onb-track{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;margin:26px 0 24px;padding:0;list-style:none}
 .onb-dialog .onb-track li{position:relative;padding:50px 6px 0;text-align:center;font:700 11.5px/1.4 'DM Sans';color:#93a0b3}
 .onb-dialog .onb-track li::before,.onb-dialog .onb-track li::after{content:'';position:absolute;top:18px;height:5px;background:#e3e7ee}
 .onb-dialog .onb-track li::before{left:0;right:50%}
@@ -279,3 +279,5 @@ transition:background .15s ease,border-color .15s ease}
 .onb-step-n{width:19px;height:19px;font-size:10.5px}
 .onb-step-body{padding-top:13px}
 .onb-step-action{padding-top:15px}
+
+.orientation-body{padding:24px;background:#f0f5fc;border-top:3px solid #ffda00}.orientation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.orientation-grid section{background:white;border:1px solid #dbe4ef;border-radius:12px;padding:22px}.orientation-grid p{line-height:1.7;color:#63758c}@media(max-width:600px){.orientation-grid{grid-template-columns:1fr}}
